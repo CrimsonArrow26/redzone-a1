@@ -1,0 +1,83 @@
+.notification-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  min-height: 60vh;
+  padding-top: 100px; /* Add top padding to account for fixed header */
+}
+
+.notification-page h3:first-of-type {
+  margin-top: 1rem; /* Reduced top margin since we have margin-top on content */
+  margin-bottom: 1rem;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.notification-content {
+  padding: 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+  margin-top: 2rem; /* Add top margin to separate from header */
+  background: #f8fafc; /* Light background to separate from header */
+  border-radius: 12px;
+  border: 1px solid #e2e8f0; /* Subtle border for separation */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.notification-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 14px 12px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 1rem;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.notification-accept {
+  background: #4caf50;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.notification-decline {
+  background: #f44336;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.notification-empty {
+  text-align: center;
+  color: #888;
+  margin-top: 40px;
+  font-size: 1.1rem;
+} 
