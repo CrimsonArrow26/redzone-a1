@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SOSService, { SOSAlert } from '../utils/sosService';
 import { supabase, adminStatusCache, clearAdminStatusCache, checkAdminStatusByEmail } from '../utils/supabaseClient';
-import AdminDebugger from '../components/AdminDebugger';
-import SimpleSafetyMonitor from '../components/SimpleSafetyMonitor';
 import { 
   AlertTriangle, 
   MapPin, 
@@ -142,7 +140,7 @@ const AdminDashboard: React.FC = () => {
         console.error('Error fetching alerts:', alertsError);
       }
 
-      const { data: usersData, error: usersError } = await supabase
+      const { count: totalUsers, error: usersError } = await supabase
         .from('app_users')
         .select('*', { count: 'exact', head: true });
 
@@ -153,15 +151,12 @@ const AdminDashboard: React.FC = () => {
       const totalAlerts = alertsData?.length || 0;
       const pendingAlerts = alertsData?.filter(a => a.status === 'pending').length || 0;
       const resolvedAlerts = alertsData?.filter(a => a.status === 'resolved').length || 0;
-      
-      // Get total user count (simplified - no last_active tracking)
-      const totalUsers = usersData?.length || 0;
 
       setStats({
         totalAlerts,
         pendingAlerts,
         resolvedAlerts,
-        activeUsers: totalUsers, // Assuming totalUsers is the active user count
+        activeUsers: totalUsers || 0,
         systemStatus: 'operational'
       });
     } catch (error) {
@@ -191,16 +186,14 @@ const AdminDashboard: React.FC = () => {
         
         setSelectedAlert(null);
         setAdminNotes('');
-        alert(`Alert ${status} successfully`);
         
         // Refresh stats
         fetchDashboardStats();
       } else {
-        alert(`Failed to update alert: ${result.error}`);
+        console.error(`Failed to update alert: ${result.error}`);
       }
     } catch (error) {
       console.error('Error updating alert status:', error);
-      alert('Failed to update alert status');
     }
   };
 
@@ -289,16 +282,6 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-            {/* Simple Safety Monitor Component */}
-      <div className="safety-monitoring-section">
-        <SimpleSafetyMonitor
-          isInRedZone={false}
-          currentLocation={null}
-        />
-      </div>
-
-      {/* Admin Debugger Component */}
-      <AdminDebugger />
 
       {/* Filters and Search */}
       <div className="filters-section">

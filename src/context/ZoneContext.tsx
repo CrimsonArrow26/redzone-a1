@@ -207,7 +207,7 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
 
   const startSafetyMonitoring = () => {
     if (!isSafetyMonitoring) {
-      console.log('🎤 Starting safety monitoring with speech recognition...');
+      console.log('🎤 Starting safety monitoring WITHOUT immediate voice recognition...');
       safetyMonitor.startMonitoring(
         (accidentResult: AccidentDetectionResult) => {
           // Accident detected - show safety popup
@@ -244,10 +244,19 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
             ...safetyData,
             isInRedZone: !!currentZone
           });
+          
+          // Check for triggers that should enable voice recognition
+          checkForVoiceRecognitionTriggers(safetyData);
         },
         // Stationary user detection callback
         async (location: { lat: number; lng: number }, durationMinutes: number) => {
           console.log(`Stationary user detected at ${location.lat}, ${location.lng} for ${durationMinutes} minutes`);
+          
+          // Enable voice recognition when stationary for 10+ minutes
+          if (durationMinutes >= 10) {
+            console.log('🎤 Enabling voice recognition due to stationary user (10+ minutes)');
+            safetyMonitor.enableManualKeywordListening();
+          }
           
           // Send SOS alert to admin
           const result = await sosService.sendStationaryUserAlert(location, durationMinutes);
@@ -303,6 +312,29 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
         }
       );
       setIsSafetyMonitoring(true);
+    }
+  };
+
+  // Function to check for triggers that should enable voice recognition
+  const checkForVoiceRecognitionTriggers = (safetyData: SafetyData) => {
+    // Check for sudden acceleration/deceleration
+    if (safetyData.acceleration > 15 || safetyData.acceleration < -15) {
+      console.log('🎤 Enabling voice recognition due to sudden acceleration/deceleration');
+      safetyMonitor.enableManualKeywordListening();
+      return;
+    }
+    
+    // Check for high speed (potential accident)
+    if (safetyData.currentSpeed > 20) { // 20 m/s = 72 km/h
+      console.log('🎤 Enabling voice recognition due to high speed');
+      safetyMonitor.enableManualKeywordListening();
+      return;
+    }
+    
+    // Check for sudden location jumps (GPS anomaly)
+    if (safetyData.lastLocation) {
+      // This would need to be implemented with previous location tracking
+      // For now, we'll rely on the stationary user detection callback
     }
   };
 

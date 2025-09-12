@@ -21,6 +21,8 @@ import Reports from './pages/Reports';
 import ReportIncident from './pages/ReportIncident';
 import Notification from './pages/Notification';
 import AuthTest from './pages/AuthTest';
+import DebugPanel from './pages/DebugPanel';
+import GeocodingTest from './pages/GeocodingTest';
 import BottomNavigation from './components/BottomNavigation';
 import FloatingActionButton from './components/FloatingActionButton';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -127,11 +129,21 @@ function App() {
                       <Notification />
                     </AuthGuard>
                   } />
+                  <Route path="/debug" element={
+                    <AuthGuard>
+                      <DebugPanel />
+                    </AuthGuard>
+                  } />
                   
-                  {/* Test Route */}
+                  {/* Test Routes */}
                   <Route path="/auth-test" element={
                     <AuthGuard>
                       <AuthTest />
+                    </AuthGuard>
+                  } />
+                  <Route path="/geocoding-test" element={
+                    <AuthGuard>
+                      <GeocodingTest />
                     </AuthGuard>
                   } />
                 </Routes>

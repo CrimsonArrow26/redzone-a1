@@ -8,16 +8,13 @@ import {
   Shield,
   AlertTriangle,
   Mic,
-  MicOff,
-  Volume2,
-  Gauge,
-  Bell,
   X
 } from 'lucide-react';
 import Header from '../components/Header';
 import './SOS.css';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
+import { useZone } from '../context/ZoneContext';
 
 interface EmergencyContact {
   id: string | number;
@@ -39,40 +36,32 @@ const SOS: React.FC = () => {
   const [isSOSActive, setIsSOSActive] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [sosContacts, setSosContacts] = useState<any[]>([]);
   
-  // Enhanced Safety Monitoring States
-  const [isSafetyMonitoring, setIsSafetyMonitoring] = useState(false);
-  const [showSafetyCheck, setShowSafetyCheck] = useState(false);
-  const [safetyCheckCount, setSafetyCheckCount] = useState(0);
-  const [safetyCheckCountdown, setSafetyCheckCountdown] = useState(300); // 5 minutes countdown for safety check
-  const [isBeeping, setIsBeeping] = useState(false);
-  const [isContinuousBeeping, setIsContinuousBeeping] = useState(false); // New state for continuous beeping
-  const [userResponded, setUserResponded] = useState(false);
+  // Debug overlay state
+  const [showDebug, setShowDebug] = useState(false);
+  
+  // Manual voice monitoring for testing
+  const [isManualVoiceMonitoring, setIsManualVoiceMonitoring] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [liveSoundLevel, setLiveSoundLevel] = useState<number | null>(null);
-  const [audioBaseline, setAudioBaseline] = useState<number | null>(null);
-  const [noiseAnomaly, setNoiseAnomaly] = useState(false);
-  const [speedData, setSpeedData] = useState<{ current: number; max: number; acceleration: number } | null>(null);
-  const [isAccelerating, setIsAccelerating] = useState(false);
-  const [isDecelerating, setIsDecelerating] = useState(false);
-  const [isSuddenStop, setIsSuddenStop] = useState(false);
-  const [isSuddenStart, setIsSuddenStart] = useState(false);
+  const [sosTriggeredByVoice, setSosTriggeredByVoice] = useState(false);
+  
+  // Parameter trigger for testing
+  const [showParameterMenu, setShowParameterMenu] = useState(false);
+  
+  // Get red zone context data
+  const { 
+    currentZone, 
+    isSafetyMonitoring, 
+    safetyData, 
+    showSafetyPopup, 
+    accidentDetails, 
+    userLocation 
+  } = useZone();
   
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const safetyCheckCountdownRef = useRef<NodeJS.Timeout | null>(null); // New ref for safety check countdown
+  const recognitionRef = useRef<any>(null);
   const location = useLocation();
-  const userId = 1; // Example user ID
-  
-  // Enhanced monitoring refs
-  const beepInterval = useRef<NodeJS.Timeout | null>(null);
-  const safetyCheckInterval = useRef<NodeJS.Timeout | null>(null);
-  const audioContext = useRef<AudioContext | null>(null);
-  const analyser = useRef<AnalyserNode | null>(null);
-  const microphone = useRef<MediaStreamAudioSourceNode | null>(null);
-  const animationFrame = useRef<number | null>(null);
-  const recognition = useRef<any>(null);
 
   const showBack = location.state?.fromHome;
 
@@ -94,180 +83,64 @@ const SOS: React.FC = () => {
     }
     fetchContacts();
     
-    // Automatically start enhanced safety monitoring when component mounts
-    // This will run in the background and monitor for safety issues
-    startEnhancedSafetyMonitoring();
-    
+    // Cleanup voice recognition on unmount
     return () => {
-      cleanupEnhancedSafetyMonitoring();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
     };
   }, []);
 
-  // Safety Check Countdown Timer
-  const startSafetyCheckCountdown = () => {
-    setSafetyCheckCountdown(300); // Reset to 5 minutes
-    setShowSafetyCheck(true);
-    startBeeping(true); // Start continuous beeping
+  const activateSOS = () => {
+    setIsSOSActive(true);
+    setCountdown(10);
     
-    // Start countdown timer
-    safetyCheckCountdownRef.current = setInterval(() => {
-      setSafetyCheckCountdown((prev) => {
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
         if (prev <= 1) {
-          // Countdown finished - stop beeping and escalate
-          console.log('⏰ Safety check countdown finished - escalating to SOS');
-          stopBeeping();
-          setShowSafetyCheck(false);
-          activateSOS(); // Automatically activate SOS
+          // SOS activated - send alerts
+          sendSOSAlerts();
           return 0;
         }
         return prev - 1;
       });
-    }, 1000); // Update every second
+    }, 1000);
   };
 
-  const stopSafetyCheckCountdown = () => {
-    if (safetyCheckCountdownRef.current) {
-      clearInterval(safetyCheckCountdownRef.current);
-      safetyCheckCountdownRef.current = null;
-    }
-    setSafetyCheckCountdown(300);
-  };
-
-  // Enhanced Safety Monitoring Functions
-  const startEnhancedSafetyMonitoring = () => {
-    console.log('🚨 Starting automatic background safety monitoring...');
-    
-    // Start periodic safety checks every 3 minutes
-    safetyCheckInterval.current = setInterval(() => {
-      if (!userResponded && !isSOSActive) {
-        setSafetyCheckCount(prev => prev + 1);
-        startSafetyCheckCountdown(); // Use the new countdown function
-        
-        // Escalate after 2 checks
-        if (safetyCheckCount >= 1) {
-          console.log('🚨 Safety check escalation - user not responding');
-          activateSOS();
-        }
-      }
-    }, 180000); // 3 minutes
-
-    // Only start voice recognition initially - no audio comparison yet
-    startVoiceRecognition();
-    startSpeedMonitoring();
-    setIsSafetyMonitoring(true);
-    
-    // Note: Audio comparison will start when SOS is activated
-    console.log('🎤 Voice recognition and movement monitoring started');
-    console.log('🔊 Audio comparison will activate when SOS is triggered');
-  };
-
-  const cleanupEnhancedSafetyMonitoring = () => {
-    if (beepInterval.current) {
-      clearInterval(beepInterval.current);
-    }
-    if (safetyCheckInterval.current) {
-      clearInterval(safetyCheckInterval.current);
-    }
-    if (safetyCheckCountdownRef.current) {
-      clearInterval(safetyCheckCountdownRef.current);
-    }
-    stopBeeping();
-    stopSafetyCheckCountdown(); // Stop the countdown timer
-    stopVoiceRecognition();
-    stopAudioLevelMonitoring();
-    stopSpeedMonitoring();
-  };
-
-  // Beeping Alert System
-  const startBeeping = (continuous: boolean = false) => {
-    setIsBeeping(true);
-    setIsContinuousBeeping(continuous);
-    
-    if (continuous) {
-      // Continuous beeping - beep every 500ms for urgency
-      beepInterval.current = setInterval(() => {
-        playBeepSound();
-      }, 500); // Beep every 500ms for continuous mode
-    } else {
-      // Regular beeping - beep every second
-      beepInterval.current = setInterval(() => {
-        playBeepSound();
-      }, 1000); // Beep every second
+  const cancelSOS = () => {
+    setIsSOSActive(false);
+    setCountdown(0);
+    setSosTriggeredByVoice(false);
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
     }
   };
 
-  const stopBeeping = () => {
-    setIsBeeping(false);
-    setIsContinuousBeeping(false);
-    if (beepInterval.current) {
-      clearInterval(beepInterval.current);
-      beepInterval.current = null;
-    }
+  const sendSOSAlerts = () => {
+    // Send SOS alerts to emergency contacts
+    console.log('🚨 SOS ALERT SENT!');
+    // Here you would implement the actual alert sending logic
   };
 
-  const playBeepSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.2);
-    } catch (error) {
-      console.log('Beep sound played');
-    }
-  };
-
-  // Safety Check Response Handler
-  const handleSafetyResponse = (isOkay: boolean) => {
-    setUserResponded(true);
-    setShowSafetyCheck(false);
-    stopBeeping(); // This will stop both regular and continuous beeping
-    stopSafetyCheckCountdown(); // Stop the countdown timer
-    
-    if (!isOkay) {
-      console.log('🚨 User reported NOT okay - activating SOS');
-      activateSOS();
-    } else {
-      console.log('✅ User confirmed safety');
-      // Reset for next check
-      setTimeout(() => {
-        setUserResponded(false);
-      }, 120000); // Wait 2 minutes before next check
-    }
-  };
-
-  // Voice Recognition
-  const startVoiceRecognition = () => {
+  // Manual Voice Recognition for Testing
+  const startManualVoiceRecognition = () => {
     if ('webkitSpeechRecognition' in window) {
       const recognition = new (window as any).webkitSpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
-      
-      let lastTriggerTime = 0; // Track last trigger time
-      const TRIGGER_COOLDOWN = 5000; // 5 seconds cooldown
 
       recognition.onstart = () => {
-        console.log('🎤 Voice recognition started');
+        console.log('🎤 Manual voice recognition started');
         setIsListening(true);
-        setTranscript(''); // Clear previous transcript
+        setTranscript('');
       };
 
       recognition.onresult = (event: any) => {
         let finalTranscript = '';
         let interimTranscript = '';
         
-        // Process both final and interim results
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
@@ -277,323 +150,136 @@ const SOS: React.FC = () => {
           }
         }
         
-        // Combine final and interim results for real-time display
-        const combinedTranscript = finalTranscript + interimTranscript;
-        setTranscript(combinedTranscript);
+        setTranscript(finalTranscript + interimTranscript);
         
-        // Only process final results for keyword detection
+        // Check for emergency keywords
         if (finalTranscript) {
-          const lowerTranscript = finalTranscript.toLowerCase();
           console.log('🎤 Final transcript:', finalTranscript);
           
-          // Stop continuous beeping if user is speaking (providing input)
-          if (isContinuousBeeping && finalTranscript.trim().length > 0) {
-            console.log('🎤 User speaking - stopping continuous beeping');
-            stopBeeping();
-            // Also stop the safety check countdown since user is responding
-            if (showSafetyCheck) {
-              stopSafetyCheckCountdown();
-            }
-          }
+          const emergencyKeywords = ['help', 'emergency', 'sos', 'danger', 'accident', 'injured', 'hurt'];
+          const lowerTranscript = finalTranscript.toLowerCase();
           
-          const currentTime = Date.now();
-          
-          // Only trigger if enough time has passed since last trigger
-          if (currentTime - lastTriggerTime > TRIGGER_COOLDOWN) {
-            // Check for emergency keywords
-            if (lowerTranscript.includes('help') || lowerTranscript.includes('emergency') || 
-                lowerTranscript.includes('sos') || lowerTranscript.includes('danger') ||
-                lowerTranscript.includes('not okay') || lowerTranscript.includes('unsafe')) {
-              console.log('🚨 Emergency keyword detected!');
+          for (const keyword of emergencyKeywords) {
+            if (lowerTranscript.includes(keyword)) {
+              console.log('🚨 Emergency keyword detected in manual mode:', keyword);
               
-              // Automatically trigger safety check for emergency keywords
-              if (!isSOSActive && !showSafetyCheck) {
-                setShowSafetyCheck(true);
-                startBeeping(true); // Start continuous beeping
-                lastTriggerTime = currentTime; // Update trigger time
-              }
+              // Stop voice monitoring immediately
+              stopManualVoiceRecognition();
+              setIsManualVoiceMonitoring(false);
               
-              // Also activate SOS directly
+              // Set flag to track voice-triggered SOS
+              setSosTriggeredByVoice(true);
+              
+              // Trigger SOS activation directly (same as real implementation)
+              console.log('🚨 Activating SOS due to keyword detection:', keyword);
               activateSOS();
-            }
-            
-            // Check for safety confirmations
-            if (lowerTranscript.includes('okay') || lowerTranscript.includes('safe') || 
-                lowerTranscript.includes('fine') || lowerTranscript.includes('good')) {
-              console.log('✅ Safety confirmation via voice');
-              handleSafetyResponse(true);
-              lastTriggerTime = currentTime; // Update trigger time
+              break;
             }
           }
         }
       };
 
       recognition.onerror = (event: any) => {
-        console.error('Voice recognition error:', event.error);
+        console.log('Manual voice recognition error:', event.error);
         setIsListening(false);
-        setTranscript('Error: ' + event.error);
       };
 
       recognition.onend = () => {
-        console.log('🎤 Voice recognition ended');
+        console.log('🎤 Manual voice recognition ended');
         setIsListening(false);
-        // Restart after a short delay
+        
+        // Auto-restart if still in manual mode
+        if (isManualVoiceMonitoring) {
         setTimeout(() => {
-          if (isSafetyMonitoring) {
-            startVoiceRecognition();
+            if (isManualVoiceMonitoring) {
+              startManualVoiceRecognition();
           }
         }, 1000);
+        }
       };
 
+      recognitionRef.current = recognition;
       recognition.start();
     } else {
-      console.log('Voice recognition not supported');
-      setTranscript('Voice recognition not supported in this browser');
+      console.log('Speech recognition not supported');
+      alert('Speech recognition not supported in this browser');
     }
   };
 
-  const stopVoiceRecognition = () => {
-    if (recognition.current) {
-      recognition.current.stop();
+  const stopManualVoiceRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
       setIsListening(false);
     }
   };
 
-  // Audio Level Monitoring
-  const startAudioLevelMonitoring = () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.log('Audio monitoring not supported');
-      return;
-    }
-
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        const audioContext = new AudioContext();
-        const analyser = audioContext.createAnalyser();
-        const microphone = audioContext.createMediaStreamSource(stream);
-        const scriptProcessor = audioContext.createScriptProcessor(2048, 1, 1);
-
-        analyser.fftSize = 256;
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        let audioBaseline: number | null = null;
-        let baselineSamples: number[] = [];
-        let baselineEstablished = false;
-        let lastTriggerTime = 0; // Track last trigger time
-        const TRIGGER_COOLDOWN = 5000; // 5 seconds cooldown
-
-        microphone.connect(analyser);
-        analyser.connect(scriptProcessor);
-        scriptProcessor.connect(audioContext.destination);
-
-        const updateAudioLevel = () => {
-          analyser.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-          
-          setLiveSoundLevel(average);
-
-          // Establish baseline in first 3 seconds
-          if (!baselineEstablished && baselineSamples.length < 60) { // Increased from 30 to 60 samples
-            baselineSamples.push(average);
-            if (baselineSamples.length === 60) {
-              audioBaseline = baselineSamples.reduce((a, b) => a + b) / baselineSamples.length;
-              // Add a minimum baseline to prevent false triggers
-              audioBaseline = Math.max(audioBaseline, 80); // Minimum baseline of 80
-              setAudioBaseline(audioBaseline);
-              baselineEstablished = true;
-              console.log('Audio baseline established:', audioBaseline);
-            }
-          }
-
-          // Check for anomalies after baseline is established
-          if (baselineEstablished && audioBaseline !== null) {
-            const threshold = audioBaseline * 2.5; // Increased from 2x to 2.5x baseline
-            const silenceThreshold = audioBaseline * 0.4; // Increased from 0.3x to 0.4x baseline
-            const currentTime = Date.now();
-            
-            // Only trigger if enough time has passed since last trigger
-            if (currentTime - lastTriggerTime > TRIGGER_COOLDOWN) {
-              // Check for sudden loud sounds
-              if (average > threshold) {
-                console.log('🚨 Loud sound detected!', average, 'vs baseline', audioBaseline);
-                setNoiseAnomaly(true);
-                
-                // Automatically trigger safety check for loud sounds
-                if (!isSOSActive && !showSafetyCheck) {
-                  startSafetyCheckCountdown(); // Use the new countdown function
-                  lastTriggerTime = currentTime; // Update trigger time
-                }
-                
-                setTimeout(() => setNoiseAnomaly(false), 5000);
-              }
-              
-              // Check for sudden silence (potential danger)
-              if (average < silenceThreshold && audioBaseline > 80) { // Increased minimum baseline check
-                console.log('🔇 Sudden silence detected!', average, 'vs baseline', audioBaseline);
-                setNoiseAnomaly(true);
-                
-                // Automatically trigger safety check for sudden silence
-                if (!isSOSActive && !showSafetyCheck) {
-                  startSafetyCheckCountdown(); // Use the new countdown function
-                  lastTriggerTime = currentTime; // Update trigger time
-                }
-                
-                setTimeout(() => setNoiseAnomaly(false), 5000);
-              }
-            }
-          }
-          
-          // Legacy loud sound detection with automatic safety check and cooldown
-          if (average > 200) { // Increased from 150 to 200
-            const currentTime = Date.now();
-            if (currentTime - lastTriggerTime > TRIGGER_COOLDOWN) {
-              console.log('🚨 Loud sound detected!');
-              
-              // Automatically trigger safety check
-              if (!isSOSActive && !showSafetyCheck) {
-                startSafetyCheckCountdown(); // Use the new countdown function
-                lastTriggerTime = currentTime; // Update trigger time
-              }
-            }
-          }
-          
-          animationFrame.current = requestAnimationFrame(updateAudioLevel);
-        };
-
-        updateAudioLevel();
-      })
-      .catch(err => {
-        console.error('Error accessing microphone:', err);
-      });
-  };
-
-  // Stop Audio Level Monitoring
-  const stopAudioLevelMonitoring = () => {
-    if (animationFrame.current) {
-      cancelAnimationFrame(animationFrame.current);
-      animationFrame.current = null;
-    }
-    setLiveSoundLevel(null);
-    setAudioBaseline(null);
-    setNoiseAnomaly(false);
-    console.log('🔊 Audio monitoring stopped');
-  };
-
-  // Enhanced Speed and Movement Monitoring
-  const startSpeedMonitoring = () => {
-    if ('DeviceMotionEvent' in window) {
-      let lastAcceleration = { x: 0, y: 0, z: 0 };
-      let lastTime = Date.now();
-      let accelerationHistory: number[] = [];
-      let lastMovementTime = Date.now();
-      let stationaryTimer: NodeJS.Timeout | null = null;
-      let lastTriggerTime = 0; // Track last trigger time
-      const TRIGGER_COOLDOWN = 5000; // 5 seconds cooldown
-      
-      const handleMotion = (event: DeviceMotionEvent) => {
-        if (event.accelerationIncludingGravity) {
-          const { x, y, z } = event.accelerationIncludingGravity;
-          const currentTime = Date.now();
-          const timeDelta = currentTime - lastTime;
-          
-          if (x && y && z && timeDelta > 0) {
-            const acceleration = Math.sqrt(x * x + y * y + z * z);
-            const speed = acceleration * timeDelta / 1000;
-            
-            accelerationHistory.push(acceleration);
-            if (accelerationHistory.length > 10) {
-              accelerationHistory.shift();
-            }
-            
-            setSpeedData({
-              current: speed,
-              max: Math.max(speed, speedData?.max || 0),
-              acceleration: acceleration
-            });
-            
-            // Update last movement time if there's significant movement
-            if (acceleration > 5) {
-              lastMovementTime = currentTime;
-              
-              // Clear stationary timer if user is moving
-              if (stationaryTimer) {
-                clearTimeout(stationaryTimer);
-                stationaryTimer = null;
-              }
-            }
-            
-            // Detect sudden acceleration/deceleration with cooldown
-            if (currentTime - lastTriggerTime > TRIGGER_COOLDOWN) {
-              if (acceleration > 25 && lastAcceleration.x < 15) {
-                setIsAccelerating(true);
-                console.log('🚨 Sudden acceleration detected');
-                setTimeout(() => setIsAccelerating(false), 3000);
-                
-                // Trigger safety check
-                if (!isSOSActive && !showSafetyCheck) {
-                  startSafetyCheckCountdown(); // Use the new countdown function
-                  lastTriggerTime = currentTime; // Update trigger time
-                }
-              }
-              
-              if (acceleration < 3 && lastAcceleration.x > 20) {
-                setIsDecelerating(true);
-                console.log('🛑 Sudden deceleration detected');
-                setTimeout(() => setIsDecelerating(false), 3000);
-                
-                // Trigger safety check
-                if (!isSOSActive && !showSafetyCheck) {
-                  startSafetyCheckCountdown(); // Use the new countdown function
-                  lastTriggerTime = currentTime; // Update trigger time
-                }
-              }
-            }
-            
-            lastAcceleration = { x: x, y: y, z: z };
-            lastTime = currentTime;
-          }
-        }
-      };
-      
-      // Start stationary user detection
-      const checkStationaryUser = () => {
-        const timeSinceLastMovement = Date.now() - lastMovementTime;
-        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
-        
-        if (timeSinceLastMovement >= fiveMinutes && !stationaryTimer) {
-          console.log('🚨 User stationary for 5+ minutes - triggering safety check');
-          startSafetyCheckCountdown(); // Use the new countdown function
-          
-          // Set a flag to prevent multiple triggers
-          stationaryTimer = setTimeout(() => {
-            stationaryTimer = null;
-          }, 60000); // Reset after 1 minute
-        }
-      };
-      
-      // Check for stationary user every 30 seconds
-      const stationaryCheckInterval = setInterval(checkStationaryUser, 30000);
-      
-      window.addEventListener('devicemotion', handleMotion);
-      
-      return () => {
-        window.removeEventListener('devicemotion', handleMotion);
-        clearInterval(stationaryCheckInterval);
-        if (stationaryTimer) {
-          clearTimeout(stationaryTimer);
-        }
-      };
+  const toggleManualVoiceMonitoring = () => {
+    if (isManualVoiceMonitoring) {
+      // Stop monitoring
+      setIsManualVoiceMonitoring(false);
+      stopManualVoiceRecognition();
+      setTranscript('');
+    } else {
+      // Start monitoring
+      setIsManualVoiceMonitoring(true);
+      startManualVoiceRecognition();
     }
   };
 
-  const stopSpeedMonitoring = () => {
-    setSpeedData(null);
-    setIsAccelerating(false);
-    setIsDecelerating(false);
-    setIsSuddenStop(false);
-    setIsSuddenStart(false);
+  // Parameter trigger functions for testing
+  const triggerSpeedChange = () => {
+    console.log('🚨 Simulating speed change parameter...');
+    // Simulate a significant speed change to trigger voice monitoring
+    // This would normally come from accelerometer data
+    console.log('🎤 Enabling voice monitoring due to speed change trigger');
+    // This would call the safety monitor's enableManualKeywordListening method
+    // For now, we'll just start voice monitoring directly
+    if (!isManualVoiceMonitoring) {
+      setIsManualVoiceMonitoring(true);
+      startManualVoiceRecognition();
+    }
+    setShowParameterMenu(false);
   };
+
+  const triggerStationaryDetection = () => {
+    console.log('🚨 Simulating stationary detection parameter...');
+    // Simulate user being stationary for 10+ minutes
+    console.log('🎤 Enabling voice monitoring due to stationary detection trigger');
+    if (!isManualVoiceMonitoring) {
+      setIsManualVoiceMonitoring(true);
+      startManualVoiceRecognition();
+    }
+    setShowParameterMenu(false);
+  };
+
+  const triggerLocationJump = () => {
+    console.log('🚨 Simulating location jump parameter...');
+    // Simulate sudden location change
+    console.log('🎤 Enabling voice monitoring due to location jump trigger');
+    if (!isManualVoiceMonitoring) {
+      setIsManualVoiceMonitoring(true);
+      startManualVoiceRecognition();
+    }
+    setShowParameterMenu(false);
+  };
+
+  const triggerAcceleration = () => {
+    console.log('🚨 Simulating acceleration parameter...');
+    // Simulate sudden acceleration/deceleration
+    console.log('🎤 Enabling voice monitoring due to acceleration trigger');
+    if (!isManualVoiceMonitoring) {
+      setIsManualVoiceMonitoring(true);
+      startManualVoiceRecognition();
+    }
+    setShowParameterMenu(false);
+  };
+
+
+
+
+
+
 
   const handleAddContact = async () => {
     if (!newContact.phone) return;
@@ -644,271 +330,349 @@ const SOS: React.FC = () => {
     }
   };
 
-  const activateSOS = () => {
-    // Stop continuous beeping if it's active (user is providing input)
-    if (isContinuousBeeping) {
-      stopBeeping();
-    }
-    
-    setIsSOSActive(true);
-    setCountdown(10);
-    
-    // Start audio comparison when SOS is activated
-    console.log('🔊 Starting audio comparison monitoring for SOS...');
-    startAudioLevelMonitoring();
-    
-    countdownRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          // SOS activated - send alerts
-          sendSOSAlerts();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const cancelSOS = () => {
-    setIsSOSActive(false);
-    setCountdown(0);
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-    }
-    
-    // Stop audio monitoring when cancelling SOS
-    console.log('🔊 Stopping audio comparison monitoring...');
-    stopAudioLevelMonitoring();
-  };
-
-  const sendSOSAlerts = () => {
-    // Send SOS alerts to emergency contacts
-    console.log('🚨 SOS ALERT SENT!');
-    // Here you would implement the actual alert sending logic
-  };
 
   return (
     <div className="sos-page page-with-header">
       <Header title="SOS Emergency" showBack={showBack} />
-      
-      {/* Safety Check Popup */}
-      {showSafetyCheck && (
-        <div className="safety-check-overlay">
-          <div className="safety-check-popup">
-            <div className="popup-header">
-              <AlertTriangle size={24} className="alert-icon" />
-              <h3>🚨 Safety Check Required</h3>
+       {/* Mini Debug Toggle */}
+       <button
+         onClick={() => setShowDebug(v => !v)}
+         style={{
+           position: 'fixed',
+           right: 16,
+           bottom: 90,
+           zIndex: 1001,
+           background: '#111827',
+           color: '#fff',
+           border: 'none',
+           borderRadius: 999,
+           padding: '8px 12px',
+           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+           fontSize: 12,
+           fontWeight: 700,
+           letterSpacing: 0.4
+         }}
+         title="Toggle safety debug"
+       >
+         {showDebug ? 'Hide Debug' : 'Show Debug'}
+       </button>
+
+       {/* Manual Voice Monitoring Toggle (Developer Testing) */}
               <button 
-                className="close-btn"
-                onClick={() => handleSafetyResponse(true)}
-              >
-                <X size={20} />
+         onClick={toggleManualVoiceMonitoring}
+         style={{
+           position: 'fixed',
+           right: 16,
+           bottom: 140,
+           zIndex: 1001,
+           background: isManualVoiceMonitoring ? '#ef4444' : '#10b981',
+           color: '#fff',
+           border: 'none',
+           borderRadius: 999,
+           padding: '8px 12px',
+           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+           fontSize: 12,
+           fontWeight: 700,
+           letterSpacing: 0.4,
+           display: 'flex',
+           alignItems: 'center',
+           gap: 6
+         }}
+         title={isManualVoiceMonitoring ? 'Stop voice monitoring' : 'Start voice monitoring (Testing)'}
+       >
+         <Mic size={14} />
+         {isManualVoiceMonitoring ? 'Stop Voice' : 'Test Voice'}
               </button>
-            </div>
-            <div className="popup-content">
-              <p className="safety-question">Are you okay?</p>
-              <p className="safety-subtitle">
-                {safetyCheckCount > 0 ? '⚠️ This is your final warning!' : 'Please confirm your safety status'}
-              </p>
-              
-              {/* Countdown Timer */}
-              <div className="countdown-timer">
-                <div className="countdown-label">Response Time Remaining:</div>
-                <div className="countdown-display">
-                  {Math.floor(safetyCheckCountdown / 60)} : {(safetyCheckCountdown % 60).toString().padStart(2, '0')}
-                </div>
-                <div className="countdown-warning">
-                  ⏰ Auto-SOS will activate when timer expires
-                </div>
-              </div>
-              
-              <div className="safety-buttons">
-                <button 
-                  className="safety-btn safe"
-                  onClick={() => handleSafetyResponse(true)}
-                >
-                  ✅ I'm Safe
-                </button>
-                <button 
-                  className="safety-btn danger"
-                  onClick={() => handleSafetyResponse(false)}
-                >
-                  🚨 I Need Help
-                </button>
-              </div>
-            </div>
-            {isBeeping && (
-              <div className="beeping-indicator">
-                {isContinuousBeeping 
-                  ? '🔊 CONTINUOUS ALERT - Speak to stop beeping!' 
-                  : '🔊 Emergency Alert Active - Respond Required'
-                }
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* Enhanced Safety Monitoring Section */}
-      <div className="enhanced-safety-section">
-        <div className="safety-header">
-          <h3>🛡️ Automatic Safety Monitoring</h3>
-          <div className="monitoring-status-badge">
-            {isSafetyMonitoring ? '🟢 Active' : '🔴 Inactive'}
-          </div>
-        </div>
-        
-        <div className="monitoring-features">
-          {/* Voice Recognition Status */}
-          <div className="monitoring-item">
-            <div className="monitoring-header">
-              <Mic size={20} />
-              <span>Voice Recognition</span>
-            </div>
-            {isListening && <span className="status-indicator listening">🎤 Listening...</span>}
-            
-            {/* Real-time Transcript Display */}
-            <div className="transcript-container">
-              <div className="transcript-header">
-                <span>🎯 Live Transcript:</span>
+       {/* Parameter Trigger Button (Developer Testing) */}
+       <button
+         onClick={() => setShowParameterMenu(!showParameterMenu)}
+         style={{
+           position: 'fixed',
+           right: 16,
+           bottom: 190,
+           zIndex: 1001,
+           background: showParameterMenu ? '#7c3aed' : '#f59e0b',
+           color: '#fff',
+           border: 'none',
+           borderRadius: 999,
+           padding: '8px 12px',
+           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+           fontSize: 12,
+           fontWeight: 700,
+           letterSpacing: 0.4,
+           display: 'flex',
+           alignItems: 'center',
+           gap: 6
+         }}
+         title="Trigger safety parameters for testing"
+       >
+         <AlertTriangle size={14} />
+         {showParameterMenu ? 'Hide Triggers' : 'Test Triggers'}
+       </button>
+
+       {/* Parameter Trigger Menu */}
+       {showParameterMenu && (
+         <div
+           style={{
+             position: 'fixed',
+             right: 16,
+             bottom: 250,
+             zIndex: 1001,
+             width: 280,
+             maxWidth: 'calc(100vw - 32px)',
+             background: '#ffffff',
+             borderRadius: 12,
+             boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+             border: '1px solid #e5e7eb',
+             overflow: 'hidden'
+           }}
+         >
+           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+             <strong style={{ fontSize: 14, color: '#374151' }}>Parameter Triggers</strong>
+             <button onClick={() => setShowParameterMenu(false)} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
+               <X size={16} />
+             </button>
+                </div>
+           <div style={{ padding: '12px' }}>
+             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: '12px', textAlign: 'center' }}>
+               Simulate safety parameters to test voice monitoring
+              </div>
+              
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button 
-                  className="clear-transcript-btn"
-                  onClick={() => {
-                    setTranscript('');
-                    // Stop continuous beeping if it's active (user is providing input)
-                    if (isContinuousBeeping) {
-                      stopBeeping();
-                    }
-                    // Also stop the safety check countdown since user is providing input
-                    if (showSafetyCheck) {
-                      stopSafetyCheckCountdown();
-                    }
-                  }}
-                  title="Clear transcript"
-                >
-                  🗑️ Clear
+                 onClick={triggerSpeedChange}
+                 style={{
+                   background: '#3b82f6',
+                   color: 'white',
+                   border: 'none',
+                   borderRadius: '8px',
+                   padding: '10px 12px',
+                   fontSize: '12px',
+                   fontWeight: '600',
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '8px',
+                   transition: 'background 0.2s'
+                 }}
+                 onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
+                 onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+               >
+                 <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%' }}></div>
+                 Speed Change (3 m/s)
+                </button>
+               
+                <button 
+                 onClick={triggerStationaryDetection}
+                 style={{
+                   background: '#10b981',
+                   color: 'white',
+                   border: 'none',
+                   borderRadius: '8px',
+                   padding: '10px 12px',
+                   fontSize: '12px',
+                   fontWeight: '600',
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '8px',
+                   transition: 'background 0.2s'
+                 }}
+                 onMouseOver={(e) => e.currentTarget.style.background = '#059669'}
+                 onMouseOut={(e) => e.currentTarget.style.background = '#10b981'}
+               >
+                 <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%' }}></div>
+                 Stationary (10+ min)
+                </button>
+               
+               <button
+                 onClick={triggerLocationJump}
+                 style={{
+                   background: '#f59e0b',
+                   color: 'white',
+                   border: 'none',
+                   borderRadius: '8px',
+                   padding: '10px 12px',
+                   fontSize: '12px',
+                   fontWeight: '600',
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '8px',
+                   transition: 'background 0.2s'
+                 }}
+                 onMouseOver={(e) => e.currentTarget.style.background = '#d97706'}
+                 onMouseOut={(e) => e.currentTarget.style.background = '#f59e0b'}
+               >
+                 <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%' }}></div>
+                 Location Jump
+               </button>
+               
+                <button 
+                 onClick={triggerAcceleration}
+                 style={{
+                   background: '#ef4444',
+                   color: 'white',
+                   border: 'none',
+                   borderRadius: '8px',
+                   padding: '10px 12px',
+                   fontSize: '12px',
+                   fontWeight: '600',
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '8px',
+                   transition: 'background 0.2s'
+                 }}
+                 onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
+                 onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
+               >
+                 <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%' }}></div>
+                 Sudden Acceleration
                 </button>
               </div>
-              <div className="transcript-display">
-                {transcript ? (
-                  <span className="transcript-text">{transcript}</span>
-                ) : (
-                  <span className="transcript-placeholder">Say something to see transcript...</span>
-                )}
+             
+             <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '12px', textAlign: 'center', lineHeight: 1.4 }}>
+               Each trigger will start voice monitoring for keyword detection
               </div>
-              {transcript && (
-                <div className="transcript-info">
-                  <small>Keywords detected: {transcript.toLowerCase().includes('help') || transcript.toLowerCase().includes('emergency') || transcript.toLowerCase().includes('sos') || transcript.toLowerCase().includes('danger') || transcript.toLowerCase().includes('not okay') || transcript.toLowerCase().includes('unsafe') ? '🚨 EMERGENCY' : '✅ Normal'}</small>
                 </div>
-              )}
             </div>
-          </div>
+       )}
 
-          {/* Audio Level Monitoring */}
-          <div className="monitoring-item">
-            <div className="monitoring-header">
-              <Volume2 size={20} />
-              <span>Audio Monitoring</span>
+      {showDebug && (
+        <div
+          style={{
+            position: 'fixed',
+            right: 16,
+            bottom: 150,
+            zIndex: 1001,
+            width: 300,
+            maxWidth: 'calc(100vw - 32px)',
+            background: '#ffffff',
+            borderRadius: 12,
+            boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+            border: '1px solid #e5e7eb',
+            overflow: 'hidden'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+            <strong style={{ fontSize: 12 }}>Safety Debug</strong>
+            <button onClick={() => setShowDebug(false)} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
+              <X size={16} />
+            </button>
             </div>
-            {!isSOSActive ? (
-              <div className="audio-status-waiting">
-                <span className="status-waiting">⏳ Waiting for SOS activation</span>
-                <p className="status-description">
-                  Audio comparison will start automatically when SOS is triggered
-                </p>
+          <div style={{ padding: 12, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5 }}>
+            <div style={{ marginBottom: 8 }}>
+              <div><strong>Red Zone Status</strong></div>
+              <div>in zone: {currentZone ? 'YES' : 'NO'}</div>
+              <div>zone name: {currentZone?.name || 'none'}</div>
+              <div>monitoring: {isSafetyMonitoring ? 'ACTIVE' : 'INACTIVE'}</div>
               </div>
-            ) : (
-              <>
-                {liveSoundLevel !== null && (
-                  <div className="audio-level">
-                    <div className="level-bar">
-                      <div 
-                        className="level-fill" 
-                        style={{ width: `${(liveSoundLevel / 255) * 100}%` }}
-                      ></div>
+            <div style={{ marginBottom: 8 }}>
+              <div><strong>Location Data</strong></div>
+              <div>lat: {userLocation ? userLocation.lat.toFixed(6) : 'n/a'}</div>
+              <div>lng: {userLocation ? userLocation.lng.toFixed(6) : 'n/a'}</div>
+              <div>zone: {currentZone ? currentZone.name : 'none'}</div>
+              <div>distance: {userLocation && currentZone ? 
+                Math.round(Math.sqrt(
+                  Math.pow(userLocation.lat - parseFloat(currentZone.latitude), 2) + 
+                  Math.pow(userLocation.lng - parseFloat(currentZone.longitude), 2)
+                ) * 111000) + 'm' : 'n/a'}</div>
                     </div>
-                    <span className="level-value">{liveSoundLevel}</span>
-                    {audioBaseline && (
-                      <span className="baseline-info">
-                        Baseline: {audioBaseline.toFixed(0)}
-                      </span>
-                    )}
+             <div style={{ marginBottom: 8 }}>
+               <div><strong>Safety Data</strong></div>
+               <div>popup shown: {showSafetyPopup ? 'YES' : 'NO'}</div>
+               <div>accident: {accidentDetails ? 'DETECTED' : 'none'}</div>
+               <div>voice enabled: {safetyData?.keywordDetected !== undefined ? 'YES' : 'NO'}</div>
+               <div>speed (accel): {safetyData?.currentSpeed ? `${safetyData.currentSpeed.toFixed(1)} m/s` : 'n/a'}</div>
+               <div>acceleration: {safetyData?.acceleration ? `${safetyData.acceleration.toFixed(1)} m/s²` : 'n/a'}</div>
                   </div>
-                )}
-                {noiseAnomaly && (
-                  <div className="noise-anomaly-alert">
-                    🚨 Audio anomaly detected!
+             <div style={{ marginBottom: 8 }}>
+               <div><strong>Voice Monitoring (Test)</strong></div>
+               <div>manual mode: {isManualVoiceMonitoring ? 'ON' : 'OFF'}</div>
+               <div>listening: {isListening ? 'YES' : 'NO'}</div>
+               <div>transcript: {transcript || 'none'}</div>
+               <div>triggered SOS: {sosTriggeredByVoice ? 'YES' : 'NO'}</div>
                   </div>
-                )}
-              </>
-            )}
+             <div style={{ marginBottom: 8 }}>
+               <div><strong>Parameter Triggers</strong></div>
+               <div>menu open: {showParameterMenu ? 'YES' : 'NO'}</div>
+               <div>available: 4 triggers</div>
+               <div>purpose: Test voice activation</div>
           </div>
-
-          {/* Movement Monitoring */}
-          <div className="monitoring-item">
-            <div className="monitoring-header">
-              <Gauge size={20} />
-              <span>Movement Monitoring</span>
+             <div style={{ marginBottom: 8 }}>
+               <div><strong>SOS Status</strong></div>
+               <div>active: {isSOSActive ? 'YES' : 'NO'}</div>
+               <div>countdown: {isSOSActive ? `${countdown}s` : 'n/a'}</div>
             </div>
-            {speedData && (
-              <div className="speed-data">
-                <div className="data-item">
-                  <span>Acceleration:</span>
-                  <span className="value">{speedData.acceleration.toFixed(2)} m/s²</span>
                 </div>
               </div>
             )}
             
-            <div className="movement-alerts">
-              {isAccelerating && <div className="alert accelerating">🚀 Sudden Acceleration</div>}
-              {isDecelerating && <div className="alert decelerating">🛑 Sudden Deceleration</div>}
-            </div>
-          </div>
 
-          {/* Safety Check Status */}
-          <div className="monitoring-item">
-            <div className="monitoring-header">
-              <Bell size={20} />
-              <span>Safety Checks</span>
+
+       {/* Voice Monitoring Status Indicator */}
+       {isManualVoiceMonitoring && (
+         <div style={{
+           position: 'fixed',
+           top: '50%',
+           left: '50%',
+           transform: 'translate(-50%, -50%)',
+           zIndex: 1000,
+           background: 'rgba(0, 0, 0, 0.8)',
+           color: 'white',
+           padding: '20px',
+           borderRadius: '12px',
+           textAlign: 'center',
+           minWidth: '250px'
+         }}>
+           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
+             <Mic size={20} />
+             <span style={{ fontWeight: 'bold' }}>Voice Monitoring Active</span>
             </div>
-            <div className="safety-status-info">
-              <span>Checks: {safetyCheckCount}</span>
-              <span>Last Response: {userResponded ? '✅ Responded' : '⏳ Waiting'}</span>
+           <div style={{ fontSize: '14px', marginBottom: '8px' }}>
+             {isListening ? '🎤 Listening for keywords...' : '⏸️ Paused'}
             </div>
-            {isBeeping && (
-              <div className="beeping-status-display">
-                {isContinuousBeeping 
-                  ? '🔊 CONTINUOUS ALERT - Speak to stop!' 
-                  : '🔊 Emergency Alert Active'
-                }
+           {transcript && (
+             <div style={{ fontSize: '12px', background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '6px', marginTop: '8px' }}>
+               <strong>Transcript:</strong> {transcript}
               </div>
             )}
-            
-            {/* Automatic Trigger Indicators */}
-            <div className="auto-trigger-indicators">
-              <h4>🔄 Automatic Triggers</h4>
-              <div className="trigger-list">
-                <div className="trigger-item">
-                  <span>🚀 Sudden Acceleration</span>
-                  <span className="trigger-status">{isAccelerating ? '🔴 Triggered' : '🟢 Normal'}</span>
+           <div style={{ fontSize: '11px', color: '#ccc', marginTop: '8px' }}>
+             Say: help, emergency, sos, danger, accident, injured, hurt
                 </div>
-                <div className="trigger-item">
-                  <span>🛑 Sudden Deceleration</span>
-                  <span className="trigger-status">{isDecelerating ? '🔴 Triggered' : '🟢 Normal'}</span>
+           <div style={{ fontSize: '10px', color: '#fbbf24', marginTop: '8px', fontWeight: 'bold' }}>
+             ⚠️ Keywords will trigger SOS activation
                 </div>
-                <div className="trigger-item">
-                  <span>🔇 Audio Anomaly</span>
-                  <span className="trigger-status">{noiseAnomaly ? '🔴 Triggered' : '🟢 Normal'}</span>
                 </div>
-                <div className="trigger-item">
-                  <span>🎤 Voice Keywords</span>
-                  <span className="trigger-status">{transcript.includes('help') || transcript.includes('emergency') || transcript.includes('sos') ? '🔴 Detected' : '🟢 Normal'}</span>
+       )}
+
+       {/* SOS Activation Alert */}
+       {isSOSActive && (
+         <div style={{
+           position: 'fixed',
+           top: '20px',
+           left: '50%',
+           transform: 'translateX(-50%)',
+           zIndex: 1002,
+           background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+           color: 'white',
+           padding: '16px 24px',
+           borderRadius: '12px',
+           textAlign: 'center',
+           boxShadow: '0 8px 32px rgba(239, 68, 68, 0.3)',
+           animation: 'pulse 1s infinite'
+         }}>
+           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '4px' }}>
+             <AlertTriangle size={20} />
+             <span style={{ fontWeight: 'bold', fontSize: '16px' }}>SOS ACTIVATED</span>
                 </div>
+           <div style={{ fontSize: '14px' }}>
+             Emergency alert will be sent in {countdown} seconds
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+       )}
 
       {/* Main SOS Section */}
       <div className="sos-main-section">
