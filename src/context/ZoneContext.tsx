@@ -333,15 +333,15 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
 
   // Function to check for triggers that should enable voice recognition
   const checkForVoiceRecognitionTriggers = (safetyData: SafetyData) => {
-    // Check for sudden acceleration/deceleration
-    if (safetyData.acceleration > 15 || safetyData.acceleration < -15) {
+    // Check for sudden acceleration/deceleration (mobile-optimized thresholds)
+    if (safetyData.acceleration > 3 || safetyData.acceleration < -3) {
       console.log('🎤 Enabling voice recognition due to sudden acceleration/deceleration');
       safetyMonitor.enableManualKeywordListening();
       return;
     }
     
-    // Check for high speed (potential accident)
-    if (safetyData.currentSpeed > 20) { // 20 m/s = 72 km/h
+    // Check for high speed (potential accident) - mobile-optimized threshold
+    if (safetyData.currentSpeed > 2) { // 2 m/s = 7.2 km/h (walking speed)
       console.log('🎤 Enabling voice recognition due to high speed');
       safetyMonitor.enableManualKeywordListening();
       return;

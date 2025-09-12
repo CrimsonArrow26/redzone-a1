@@ -383,15 +383,26 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
           const currentTime = Date.now();
           const timeDelta = currentTime - lastTime;
           
-          if (x && y && z && timeDelta > 0) {
+          if (x !== null && y !== null && z !== null && timeDelta > 0) {
             const acceleration = Math.sqrt(x * x + y * y + z * z);
-            const speed = acceleration * timeDelta / 1000; // Convert to m/s
+            // Calculate speed more accurately for mobile
+            const speed = Math.abs(acceleration - 9.8) * timeDelta / 1000; // Remove gravity component
             
             // Store acceleration history for pattern analysis
             accelerationHistory.push(acceleration);
             if (accelerationHistory.length > 10) {
               accelerationHistory.shift();
             }
+            
+            // Log debug information
+            console.log('📱 Motion Data:', {
+              x: x.toFixed(2),
+              y: y.toFixed(2),
+              z: z.toFixed(2),
+              acceleration: acceleration.toFixed(2),
+              speed: speed.toFixed(2),
+              timeDelta: timeDelta
+            });
             
             setSpeedData({
               current: speed,
@@ -682,6 +693,38 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
         ) : (
           <span className="no-location">Location not available</span>
         )}
+      </div>
+
+      {/* Debug Information */}
+      <div className="safety-section">
+        <div className="section-header">
+          <Activity size={20} />
+          <span>Debug Information</span>
+        </div>
+        <div className="debug-info">
+          <div className="debug-item">
+            <span>Device Type:</span>
+            <span className="value">
+              {/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop'}
+            </span>
+          </div>
+          <div className="debug-item">
+            <span>Voice Status:</span>
+            <span className="value">{isListening ? '🎤 Listening' : '⏸️ Paused'}</span>
+          </div>
+          <div className="debug-item">
+            <span>GPS Status:</span>
+            <span className="value">{currentLocation ? '📍 Active' : '❌ Inactive'}</span>
+          </div>
+          <div className="debug-item">
+            <span>Motion Status:</span>
+            <span className="value">{speedData ? '📱 Active' : '❌ Inactive'}</span>
+          </div>
+          <div className="debug-item">
+            <span>Red Zone:</span>
+            <span className="value">{isInRedZone ? '🚨 Active' : '✅ Safe'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Safety Tips */}

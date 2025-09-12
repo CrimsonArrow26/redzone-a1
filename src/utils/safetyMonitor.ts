@@ -20,14 +20,14 @@ class SafetyMonitor {
   private isActive = false;
   private sensorData: SafetyData[] = [];
   private maxDataPoints = 50;
-  private speedThreshold = 5; // m/s (18 km/h) - threshold for "high speed"
-  private decelerationThreshold = -8; // m/s² - sudden deceleration threshold
-  private accelerationThreshold = 8; // m/s² - sudden acceleration threshold
-  private stationaryThreshold = 10; // minutes - threshold for stationary user detection
-  private voiceThreshold = 90; // dB - threshold for voice level detection
+  private speedThreshold = 1.5; // m/s (5.4 km/h) - threshold for "high speed" (walking speed)
+  private decelerationThreshold = -3; // m/s² - sudden deceleration threshold (reduced for mobile)
+  private accelerationThreshold = 3; // m/s² - sudden acceleration threshold (reduced for mobile)
+  private stationaryThreshold = 5; // minutes - threshold for stationary user detection (reduced for testing)
+  private voiceThreshold = 60; // dB - threshold for voice level detection (reduced for mobile)
   private keywordToDetect = 'help'; // keyword to listen for
-  private maxReasonableSpeed = 50; // m/s (180 km/h) - maximum reasonable speed to prevent GPS glitches
-  private maxReasonableAcceleration = 20; // m/s² - maximum reasonable acceleration
+  private maxReasonableSpeed = 30; // m/s (108 km/h) - maximum reasonable speed to prevent GPS glitches
+  private maxReasonableAcceleration = 10; // m/s² - maximum reasonable acceleration (reduced for mobile)
   private locationUpdateInterval: NodeJS.Timeout | null = null;
   private motionUpdateInterval: NodeJS.Timeout | null = null;
   private voiceUpdateInterval: NodeJS.Timeout | null = null;
@@ -52,6 +52,11 @@ class SafetyMonitor {
   private maxTotalRestartAttempts = 20; // Maximum total restart attempts before giving up
   private isRestartDisabled = false; // Flag to completely disable restarts if too many failures
   
+  // Mobile device detection
+  private isMobileDevice = false;
+  private isIOS = false;
+  private isAndroid = false;
+  
   // Transcript functionality
   private transcript = '';
   private onTranscriptUpdate: ((transcript: string) => void) | null = null;
@@ -62,6 +67,11 @@ class SafetyMonitor {
   ) {
     this.onPermissionRequest = onPermissionRequest || null;
     this.onTranscriptUpdate = onTranscriptUpdate || null;
+    
+    // Detect mobile device and adjust settings
+    this.detectMobileDevice();
+    this.adjustSettingsForMobile();
+    
     this.requestPermissions();
     this.initializeVoiceRecognition();
     
@@ -70,6 +80,39 @@ class SafetyMonitor {
     this.totalRestartAttempts = 0;
     this.isRestartDisabled = false;
     console.log('🎤 SafetyMonitor constructor - restart counters reset');
+  }
+
+  private detectMobileDevice() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    this.isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+    this.isIOS = /iphone|ipad|ipod/i.test(userAgent);
+    this.isAndroid = /android/i.test(userAgent);
+    
+    console.log('📱 Device Detection:');
+    console.log('  - Mobile Device:', this.isMobileDevice);
+    console.log('  - iOS:', this.isIOS);
+    console.log('  - Android:', this.isAndroid);
+    console.log('  - User Agent:', userAgent);
+  }
+
+  private adjustSettingsForMobile() {
+    if (this.isMobileDevice) {
+      console.log('📱 Adjusting settings for mobile device...');
+      
+      // More sensitive thresholds for mobile
+      this.speedThreshold = 1.0; // m/s (3.6 km/h) - even more sensitive for walking
+      this.decelerationThreshold = -2; // m/s² - more sensitive for mobile
+      this.accelerationThreshold = 2; // m/s² - more sensitive for mobile
+      this.stationaryThreshold = 3; // minutes - faster detection for mobile
+      this.voiceThreshold = 50; // dB - lower threshold for mobile microphones
+      
+      console.log('📱 Mobile-optimized settings applied:');
+      console.log('  - Speed threshold:', this.speedThreshold, 'm/s');
+      console.log('  - Acceleration threshold:', this.accelerationThreshold, 'm/s²');
+      console.log('  - Deceleration threshold:', this.decelerationThreshold, 'm/s²');
+      console.log('  - Stationary threshold:', this.stationaryThreshold, 'minutes');
+      console.log('  - Voice threshold:', this.voiceThreshold, 'dB');
+    }
   }
 
   private async requestPermissions() {
@@ -152,6 +195,21 @@ class SafetyMonitor {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
+        
+        // Mobile-specific optimizations
+        if (this.isMobileDevice) {
+          // Reduce network load on mobile
+          if ('maxAlternatives' in this.recognition) {
+            this.recognition.maxAlternatives = 1;
+          }
+          
+          // Set mobile-friendly timeout
+          if ('timeout' in this.recognition) {
+            this.recognition.timeout = 10000; // 10 seconds
+          }
+          
+          console.log('📱 Mobile-optimized speech recognition settings applied');
+        }
         
         // Add network-friendly settings
         if ('maxAlternatives' in this.recognition) {
@@ -522,9 +580,9 @@ class SafetyMonitor {
           }
         },
         { 
-          enableHighAccuracy: false, // Use false for desktop to reduce timeouts
-          timeout: 10000, // Increase timeout to 10 seconds
-          maximumAge: 30000 // Allow older positions (30 seconds)
+          enableHighAccuracy: this.isMobileDevice, // Use high accuracy for mobile
+          timeout: this.isMobileDevice ? 15000 : 10000, // Longer timeout for mobile
+          maximumAge: this.isMobileDevice ? 10000 : 30000 // Fresher data for mobile
         }
       );
     }, 3000); // Update every 3 seconds instead of 2 for better stability
@@ -754,14 +812,25 @@ class SafetyMonitor {
     console.log('🎤 Starting voice level monitoring...');
     console.log('🎤 Navigator mediaDevices available:', !!navigator.mediaDevices);
     console.log('🎤 getUserMedia available:', !!('getUserMedia' in navigator.mediaDevices));
+    console.log('📱 Mobile device:', this.isMobileDevice);
     
     if (!('getUserMedia' in navigator.mediaDevices)) {
       console.warn('❌ Microphone access not supported');
       return;
     }
 
-    console.log('🎤 Requesting microphone permission...');
-    navigator.mediaDevices.getUserMedia({ audio: true })
+    // Mobile-optimized audio constraints
+    const audioConstraints = this.isMobileDevice ? {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 44100
+      }
+    } : { audio: true };
+
+    console.log('🎤 Requesting microphone permission with constraints:', audioConstraints);
+    navigator.mediaDevices.getUserMedia(audioConstraints)
       .then((stream) => {
         console.log('✅ Microphone permission granted!');
         console.log('🎤 Stream tracks:', stream.getTracks().length);
