@@ -1,4 +1,4 @@
-import { supabase, adminStatusCache } from './supabaseClient';
+import { supabase } from './supabaseClient';
 
 export interface SOSAlert {
   id?: string;
@@ -116,7 +116,7 @@ class SOSService {
         alertType = 'voice_keyword';
       } else if (userMessage && userMessage.includes('voice level')) {
         alertType = 'voice_level';
-      } else if (userMessage && userMessage.includes('acceleration') || userMessage.includes('deceleration')) {
+      } else if (userMessage && (userMessage.includes('acceleration') || userMessage.includes('deceleration'))) {
         alertType = 'speed_accident';
       }
 
@@ -155,30 +155,6 @@ class SOSService {
     }
   }
 
-  /**
-   * Get address from coordinates (simplified to avoid CORS issues)
-   */
-  private async getAddressFromCoordinates(lat: number, lng: number): Promise<string> {
-    try {
-      // For now, return a simple location string to avoid CORS issues
-      // You can integrate with a backend geocoding service later
-      return `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      
-      // Alternative: Use a CORS proxy (not recommended for production)
-      // const response = await fetch(
-      //   `https://cors-anywhere.herokuapp.com/https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-      // );
-      
-      // if (response.ok) {
-      //   const data = await response.json();
-      //   return data.display_name || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      // }
-    } catch (error) {
-      console.warn('Geocoding failed:', error);
-    }
-    
-    return `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-  }
 
   /**
    * Simplified location address for stationary user alerts
@@ -519,6 +495,78 @@ class SOSService {
     } catch (error) {
       console.error('Error sending voice level alert:', error);
       return { success: false, error: 'Failed to send alert' };
+    }
+  }
+
+  /**
+   * Send SOS alert to emergency contacts
+   */
+  public async sendAlertToEmergencyContacts(
+    location: { lat: number; lng: number },
+    alertMessage: string,
+    alertType: string = 'safety_alert'
+  ): Promise<{ success: boolean; contactsNotified: number; error?: string }> {
+    try {
+      if (!this.currentUser || !this.isInitialized) {
+        await this.initializeUser();
+      }
+
+      if (!this.currentUser?.id) {
+        return { 
+          success: false, 
+          contactsNotified: 0,
+          error: 'User not authenticated. Please log in again.' 
+        };
+      }
+
+      // Get user's emergency contacts
+      const { data: emergencyContacts, error: contactsError } = await supabase
+        .from('emergency_contacts')
+        .select('contact_id, relationship, contact:contact_id (username, phone, email)')
+        .eq('user_id', this.currentUser.id);
+
+      if (contactsError) {
+        console.error('Error fetching emergency contacts:', contactsError);
+        return { success: false, contactsNotified: 0, error: contactsError.message };
+      }
+
+      if (!emergencyContacts || emergencyContacts.length === 0) {
+        console.log('No emergency contacts found for user');
+        return { success: true, contactsNotified: 0 };
+      }
+
+      const locationString = `Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+      let contactsNotified = 0;
+
+      // Send notifications to each emergency contact
+      for (const contact of emergencyContacts) {
+        const contactData = Array.isArray(contact.contact) ? contact.contact[0] : contact.contact;
+        
+        if (contactData) {
+          // Create notification in the database
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert([{
+              recipient_id: contact.contact_id,
+              sender_id: this.currentUser.id,
+              message: `🚨 ${alertType.toUpperCase()} ALERT! ${this.currentUser.email || 'A user'} needs immediate help at ${locationString}. ${alertMessage}`,
+              read: false,
+              notification_type: alertType
+            }]);
+
+          if (notificationError) {
+            console.error('Error sending notification to contact:', contactData.username, notificationError);
+          } else {
+            console.log(`✅ ${alertType} notification sent to ${contactData.username} (${contactData.phone})`);
+            contactsNotified++;
+          }
+        }
+      }
+
+      return { success: true, contactsNotified };
+    } catch (error) {
+      console.error('Error sending alerts to emergency contacts:', error);
+      return { success: false, contactsNotified: 0, error: 'Failed to send alerts to emergency contacts' };
     }
   }
 

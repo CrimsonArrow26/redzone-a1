@@ -261,12 +261,20 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
           // Send SOS alert to admin
           const result = await sosService.sendStationaryUserAlert(location, durationMinutes);
           
+          // Also send alert to emergency contacts
+          const emergencyResult = await sosService.sendAlertToEmergencyContacts(
+            location, 
+            `You have been stationary for ${durationMinutes} minutes in a red zone. Please check on them immediately!`,
+            'stationary_alert'
+          );
+          
           if (result.success) {
             console.log('SOS alert sent successfully:', result.alertId);
+            console.log(`Emergency contacts notified: ${emergencyResult.contactsNotified}`);
             // Show popup instead of browser alert
             showSafetyAlert({
               type: 'sos_triggered',
-              message: `You have been stationary for ${durationMinutes} minutes. Admin has been notified.`,
+              message: `You have been stationary for ${durationMinutes} minutes. Admin and ${emergencyResult.contactsNotified} emergency contacts have been notified.`,
               severity: 'danger',
               autoClose: true,
               autoCloseDelay: 10000
@@ -289,12 +297,20 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
           // Send SOS alert to admin for keyword detection
           const result = await sosService.sendStationaryUserAlert(location, 0, `Emergency keyword "${keyword}" detected`);
           
+          // Also send alert to emergency contacts
+          const emergencyResult = await sosService.sendAlertToEmergencyContacts(
+            location, 
+            `Emergency keyword "${keyword}" was detected! Please check on them immediately!`,
+            'voice_keyword_alert'
+          );
+          
           if (result.success) {
             console.log('Keyword SOS alert sent successfully:', result.alertId);
+            console.log(`Emergency contacts notified: ${emergencyResult.contactsNotified}`);
             // Show popup instead of browser alert
             showSafetyAlert({
               type: 'sos_triggered',
-              message: `Emergency keyword "${keyword}" detected! Admin has been notified.`,
+              message: `Emergency keyword "${keyword}" detected! Admin and ${emergencyResult.contactsNotified} emergency contacts have been notified.`,
               severity: 'danger',
               autoClose: true,
               autoCloseDelay: 8000
@@ -317,36 +333,25 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
 
   // Function to check for triggers that should enable voice recognition
   const checkForVoiceRecognitionTriggers = (safetyData: SafetyData) => {
-    // Check for sudden acceleration/deceleration (more sensitive threshold)
-    if (safetyData.acceleration > 8 || safetyData.acceleration < -8) {
+    // Check for sudden acceleration/deceleration
+    if (safetyData.acceleration > 15 || safetyData.acceleration < -15) {
       console.log('🎤 Enabling voice recognition due to sudden acceleration/deceleration');
       safetyMonitor.enableManualKeywordListening();
       return;
     }
     
-    // Check for high speed (potential accident) - lower threshold for better detection
-    if (safetyData.currentSpeed > 15) { // 15 m/s = 54 km/h
+    // Check for high speed (potential accident)
+    if (safetyData.currentSpeed > 20) { // 20 m/s = 72 km/h
       console.log('🎤 Enabling voice recognition due to high speed');
       safetyMonitor.enableManualKeywordListening();
       return;
     }
     
-    // Check for high voice level (potential distress)
-    if (safetyData.voiceLevel && safetyData.voiceLevel > 80) { // 80 dB threshold
-      console.log('🎤 Enabling voice recognition due to high voice level');
-      safetyMonitor.enableManualKeywordListening();
-      return;
+    // Check for sudden location jumps (GPS anomaly)
+    if (safetyData.lastLocation) {
+      // This would need to be implemented with previous location tracking
+      // For now, we'll rely on the stationary user detection callback
     }
-    
-    // Check for keyword detection (already detected, but ensure voice is enabled)
-    if (safetyData.keywordDetected) {
-      console.log('🎤 Voice recognition already enabled due to keyword detection');
-      safetyMonitor.enableManualKeywordListening();
-      return;
-    }
-    
-    // Check for sudden location jumps (GPS anomaly) - would need previous location tracking
-    // For now, we'll rely on the stationary user detection callback
   };
 
   const stopSafetyMonitoring = () => {
