@@ -106,6 +106,10 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
   // Initialize safety monitoring for debugging purposes (always active)
   useEffect(() => {
     console.log('🔧 Initializing safety monitoring for debug purposes...');
+    
+    // Expose safety monitor globally for debugging
+    (window as any).safetyMonitor = safetyMonitor;
+    
     safetyMonitor.startMonitoring(
       (accidentResult: AccidentDetectionResult) => {
         // Only show popup if in red zone

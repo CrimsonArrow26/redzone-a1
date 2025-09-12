@@ -82,6 +82,48 @@ class SafetyMonitor {
     console.log('🎤 SafetyMonitor constructor - restart counters reset');
   }
 
+  private async requestLocationPermission(): Promise<boolean> {
+    if (!('geolocation' in navigator)) {
+      console.warn('Geolocation not available');
+      return false;
+    }
+
+    try {
+      console.log('📍 Requesting location permission...');
+      
+      // Try to get current position to trigger permission request
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        );
+      });
+
+      console.log('✅ Location permission granted');
+      console.log(`📍 Initial location: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`);
+      console.log(`📍 Accuracy: ${position.coords.accuracy}m`);
+      
+      return true;
+    } catch (error: any) {
+      console.warn('❌ Location permission denied or error:', error);
+      
+      if (error.code === 1) { // PERMISSION_DENIED
+        console.error('📍 Location permission denied - please enable location access in browser settings');
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        console.warn('📍 Location unavailable - GPS might be weak or indoors');
+      } else if (error.code === 3) { // TIMEOUT
+        console.warn('📍 Location request timeout - GPS might be slow');
+      }
+      
+      return false;
+    }
+  }
+
   private detectMobileDevice() {
     const userAgent = navigator.userAgent.toLowerCase();
     this.isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
@@ -133,6 +175,11 @@ class SafetyMonitor {
       } catch (error) {
         console.warn('Could not check microphone permission:', error);
       }
+    }
+
+    // Request location permission for mobile
+    if (this.isMobileDevice) {
+      await this.requestLocationPermission();
     }
 
     // Request motion sensors permission (if available)
@@ -462,15 +509,25 @@ class SafetyMonitor {
       return;
     }
 
+    // Request location permission explicitly for mobile
+    if (this.isMobileDevice) {
+      console.log('📱 Mobile device detected - requesting precise location permission...');
+      this.requestLocationPermission();
+    }
+
     // Cache the last known location to prevent unnecessary changes
     let lastKnownLocation: { lat: number; lng: number } | null = null;
     let locationStabilityCounter = 0;
+    let consecutiveErrors = 0;
 
     this.locationUpdateInterval = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          consecutiveErrors = 0; // Reset error counter on success
           let { latitude, longitude } = position.coords;
           const timestamp = Date.now();
+          
+          console.log(`📍 GPS Update - Accuracy: ${position.coords.accuracy}m, Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
           
           // Check if location has changed significantly (more than 5 meters)
           if (lastKnownLocation) {
@@ -567,22 +624,37 @@ class SafetyMonitor {
           this.checkForAccidents();
         },
         (error) => {
-          console.warn('Geolocation error:', error);
+          consecutiveErrors++;
+          console.warn(`📍 Geolocation error (${consecutiveErrors}):`, error);
           
           // Handle specific geolocation errors
           if (error.code === 3) { // TIMEOUT
-            console.log('Geolocation timeout - this is normal in some environments');
-            // Don't stop monitoring, just continue with next attempt
+            console.log('📍 Geolocation timeout - trying again...');
+            if (consecutiveErrors > 5) {
+              console.warn('📍 Too many timeouts - GPS might be weak, trying with lower accuracy');
+            }
           } else if (error.code === 1) { // PERMISSION_DENIED
-            console.error('Geolocation permission denied');
+            console.error('📍 Geolocation permission denied - please enable location access');
+            if (this.onPermissionRequest) {
+              this.onPermissionRequest('microphone', false); // Reuse permission callback
+            }
           } else if (error.code === 2) { // POSITION_UNAVAILABLE
-            console.warn('Geolocation position unavailable');
+            console.warn('📍 Geolocation position unavailable - GPS might be weak or indoors');
+            if (consecutiveErrors > 3) {
+              console.warn('📍 Multiple position errors - trying with lower accuracy settings');
+            }
+          }
+          
+          // If too many consecutive errors, try with lower accuracy
+          if (consecutiveErrors > 5) {
+            console.log('📍 Switching to lower accuracy mode due to repeated errors');
+            // This will be handled in the next iteration with different options
           }
         },
         { 
-          enableHighAccuracy: this.isMobileDevice, // Use high accuracy for mobile
-          timeout: this.isMobileDevice ? 15000 : 10000, // Longer timeout for mobile
-          maximumAge: this.isMobileDevice ? 10000 : 30000 // Fresher data for mobile
+          enableHighAccuracy: this.isMobileDevice && consecutiveErrors < 5, // Use high accuracy for mobile, but fallback if errors
+          timeout: this.isMobileDevice ? 20000 : 10000, // Longer timeout for mobile
+          maximumAge: this.isMobileDevice ? 5000 : 30000 // Fresher data for mobile
         }
       );
     }, 3000); // Update every 3 seconds instead of 2 for better stability
@@ -1117,6 +1189,49 @@ class SafetyMonitor {
       } catch (error) {
         console.error('Test: Error starting speech recognition:', error);
       }
+    }
+  }
+
+  // Public method to test GPS accuracy
+  public async testGPSAccuracy(): Promise<{ success: boolean; accuracy?: number; location?: { lat: number; lng: number } }> {
+    if (!('geolocation' in navigator)) {
+      return { success: false };
+    }
+
+    try {
+      console.log('📍 Testing GPS accuracy...');
+      
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          }
+        );
+      });
+
+      const accuracy = position.coords.accuracy;
+      const location = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+
+      console.log(`📍 GPS Test Result:`);
+      console.log(`  - Accuracy: ${accuracy}m`);
+      console.log(`  - Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
+      console.log(`  - Timestamp: ${new Date(position.timestamp).toLocaleString()}`);
+
+      return {
+        success: true,
+        accuracy,
+        location
+      };
+    } catch (error: any) {
+      console.error('❌ GPS test failed:', error);
+      return { success: false };
     }
   }
 

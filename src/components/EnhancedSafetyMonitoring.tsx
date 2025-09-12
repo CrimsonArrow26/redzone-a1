@@ -739,6 +739,28 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
               {currentLocation ? `${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}` : 'N/A'}
             </span>
           </div>
+          <div className="debug-item">
+            <button 
+              onClick={async () => {
+                console.log('📍 Testing GPS accuracy...');
+                // This will trigger GPS test in console
+                if (window.safetyMonitor) {
+                  await window.safetyMonitor.testGPSAccuracy();
+                }
+              }}
+              style={{
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              Test GPS
+            </button>
+          </div>
         </div>
       </div>
 
