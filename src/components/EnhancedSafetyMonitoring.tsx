@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Volume2, AlertTriangle, MapPin, Gauge, Activity, Bell, X } from 'lucide-react';
 import SOSService from '../utils/sosService';
+import { useZone } from '../context/ZoneContext';
 import './EnhancedSafetyMonitoring.css';
 
 interface EnhancedSafetyMonitoringProps {
@@ -12,11 +13,11 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
   isInRedZone,
   currentLocation
 }) => {
+  const { safetyData, isSafetyMonitoring, getSystemStatus } = useZone();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [recognition, setRecognition] = useState<any>(null);
   const [liveSoundLevel, setLiveSoundLevel] = useState<number | null>(null);
-  const [isSafetyMonitoring, setIsSafetyMonitoring] = useState(false);
   const [hasKeywordDetected, setHasKeywordDetected] = useState(false);
   const [speedData, setSpeedData] = useState<{ current: number; max: number; acceleration: number } | null>(null);
   const [isAccelerating, setIsAccelerating] = useState(false);
@@ -717,12 +718,26 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
             <span className="value">{currentLocation ? '📍 Active' : '❌ Inactive'}</span>
           </div>
           <div className="debug-item">
-            <span>Motion Status:</span>
-            <span className="value">{speedData ? '📱 Active' : '❌ Inactive'}</span>
+            <span>Speed:</span>
+            <span className="value">{safetyData?.currentSpeed ? `${safetyData.currentSpeed.toFixed(1)} m/s` : 'N/A'}</span>
+          </div>
+          <div className="debug-item">
+            <span>Acceleration:</span>
+            <span className="value">{safetyData?.acceleration ? `${safetyData.acceleration.toFixed(1)} m/s²` : 'N/A'}</span>
+          </div>
+          <div className="debug-item">
+            <span>Safety Monitoring:</span>
+            <span className="value">{isSafetyMonitoring ? '🟢 Active' : '🔴 Inactive'}</span>
           </div>
           <div className="debug-item">
             <span>Red Zone:</span>
             <span className="value">{isInRedZone ? '🚨 Active' : '✅ Safe'}</span>
+          </div>
+          <div className="debug-item">
+            <span>Location:</span>
+            <span className="value">
+              {currentLocation ? `${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}` : 'N/A'}
+            </span>
           </div>
         </div>
       </div>

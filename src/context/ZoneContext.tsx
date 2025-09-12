@@ -103,6 +103,51 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Initialize safety monitoring for debugging purposes (always active)
+  useEffect(() => {
+    console.log('🔧 Initializing safety monitoring for debug purposes...');
+    safetyMonitor.startMonitoring(
+      (accidentResult: AccidentDetectionResult) => {
+        // Only show popup if in red zone
+        if (currentZone) {
+          setAccidentDetails(accidentResult);
+          setShowSafetyPopup(true);
+        }
+      },
+      (data: SafetyData) => {
+        setSafetyData(data);
+      },
+      (location: { lat: number; lng: number }, duration: number) => {
+        console.log(`🚨 Stationary user detected for ${duration} minutes at:`, location);
+        // Send SOS alert to admin
+        sosService.sendStationaryUserAlert(location, duration);
+        // Send alert to emergency contacts
+        sosService.sendAlertToEmergencyContacts(
+          location,
+          `You have been stationary for ${duration} minutes.`,
+          'stationary_user'
+        );
+      },
+      (location: { lat: number; lng: number }, keyword: string) => {
+        console.log(`🎤 Voice keyword "${keyword}" detected at:`, location);
+        // Send SOS alert to admin for keyword detection
+        sosService.sendStationaryUserAlert(location, 0, `Emergency keyword "${keyword}" detected`);
+        // Send alert to emergency contacts for keyword detection
+        sosService.sendAlertToEmergencyContacts(
+          location,
+          `Emergency keyword "${keyword}" detected!`,
+          'voice_keyword'
+        );
+      }
+    );
+    setIsSafetyMonitoring(true);
+
+    return () => {
+      safetyMonitor.stopMonitoring();
+      setIsSafetyMonitoring(false);
+    };
+  }, [safetyMonitor, sosService, currentZone]);
+
   // Safe vibration function that checks user interaction
   const safeVibrate = (pattern: number | number[]) => {
     if (hasUserInteracted && 'vibrate' in navigator) {
@@ -206,129 +251,8 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
   }, [currentZone, isSafetyMonitoring]);
 
   const startSafetyMonitoring = () => {
-    if (!isSafetyMonitoring) {
-      console.log('🎤 Starting safety monitoring WITHOUT immediate voice recognition...');
-      safetyMonitor.startMonitoring(
-        (accidentResult: AccidentDetectionResult) => {
-          // Accident detected - show safety popup
-          setAccidentDetails(accidentResult);
-          setShowSafetyPopup(true);
-          
-          // Send SOS alert to admin based on accident type
-          if (accidentResult.isPotentialAccident) {
-            const currentData = safetyMonitor.getCurrentSafetyData();
-            if (currentData && currentData.lastLocation) {
-              sosService.sendStationaryUserAlert(
-                currentData.lastLocation,
-                0,
-                `${accidentResult.reason} (${accidentResult.triggerType} trigger)`
-              );
-            }
-          }
-          
-          // Show SOS popup instead of browser alert
-          showSafetyAlert({
-            type: 'sos_triggered',
-            message: `Safety alert: ${accidentResult.reason}`,
-            severity: 'danger',
-            autoClose: true,
-            autoCloseDelay: 8000
-          });
-          
-          // Vibrate to alert user
-          safeVibrate([200, 100, 200, 100, 200]);
-        },
-        (safetyData: SafetyData) => {
-          // Update safety data with red zone status
-          setSafetyData({
-            ...safetyData,
-            isInRedZone: !!currentZone
-          });
-          
-          // Check for triggers that should enable voice recognition
-          checkForVoiceRecognitionTriggers(safetyData);
-        },
-        // Stationary user detection callback
-        async (location: { lat: number; lng: number }, durationMinutes: number) => {
-          console.log(`Stationary user detected at ${location.lat}, ${location.lng} for ${durationMinutes} minutes`);
-          
-          // Enable voice recognition when stationary for 10+ minutes
-          if (durationMinutes >= 10) {
-            console.log('🎤 Enabling voice recognition due to stationary user (10+ minutes)');
-            safetyMonitor.enableManualKeywordListening();
-          }
-          
-          // Send SOS alert to admin
-          const result = await sosService.sendStationaryUserAlert(location, durationMinutes);
-          
-          // Also send alert to emergency contacts
-          const emergencyResult = await sosService.sendAlertToEmergencyContacts(
-            location, 
-            `You have been stationary for ${durationMinutes} minutes in a red zone. Please check on them immediately!`,
-            'stationary_alert'
-          );
-          
-          if (result.success) {
-            console.log('SOS alert sent successfully:', result.alertId);
-            console.log(`Emergency contacts notified: ${emergencyResult.contactsNotified}`);
-            // Show popup instead of browser alert
-            showSafetyAlert({
-              type: 'sos_triggered',
-              message: `You have been stationary for ${durationMinutes} minutes. Admin and ${emergencyResult.contactsNotified} emergency contacts have been notified.`,
-              severity: 'danger',
-              autoClose: true,
-              autoCloseDelay: 10000
-            });
-          } else {
-            console.error('Failed to send SOS alert:', result.error);
-            showSafetyAlert({
-              type: 'sos_triggered',
-              message: 'Failed to send SOS alert. Please check your connection.',
-              severity: 'warning',
-              autoClose: true,
-              autoCloseDelay: 5000
-            });
-          }
-        },
-        // Voice keyword detection callback
-        async (location: { lat: number; lng: number }, keyword: string) => {
-          console.log(`Emergency keyword "${keyword}" detected at ${location.lat}, ${location.lng}`);
-          
-          // Send SOS alert to admin for keyword detection
-          const result = await sosService.sendStationaryUserAlert(location, 0, `Emergency keyword "${keyword}" detected`);
-          
-          // Also send alert to emergency contacts
-          const emergencyResult = await sosService.sendAlertToEmergencyContacts(
-            location, 
-            `Emergency keyword "${keyword}" was detected! Please check on them immediately!`,
-            'voice_keyword_alert'
-          );
-          
-          if (result.success) {
-            console.log('Keyword SOS alert sent successfully:', result.alertId);
-            console.log(`Emergency contacts notified: ${emergencyResult.contactsNotified}`);
-            // Show popup instead of browser alert
-            showSafetyAlert({
-              type: 'sos_triggered',
-              message: `Emergency keyword "${keyword}" detected! Admin and ${emergencyResult.contactsNotified} emergency contacts have been notified.`,
-              severity: 'danger',
-              autoClose: true,
-              autoCloseDelay: 8000
-            });
-          } else {
-            console.error('Failed to send keyword SOS alert:', result.error);
-            showSafetyAlert({
-              type: 'sos_triggered',
-              message: 'Failed to send keyword SOS alert. Please check your connection.',
-              severity: 'warning',
-              autoClose: true,
-              autoCloseDelay: 5000
-            });
-          }
-        }
-      );
-      setIsSafetyMonitoring(true);
-    }
+    // Safety monitoring is now always active for debugging
+    console.log('🎤 Safety monitoring is already active for debugging purposes');
   };
 
   // Function to check for triggers that should enable voice recognition
