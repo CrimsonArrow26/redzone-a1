@@ -317,25 +317,36 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
 
   // Function to check for triggers that should enable voice recognition
   const checkForVoiceRecognitionTriggers = (safetyData: SafetyData) => {
-    // Check for sudden acceleration/deceleration
-    if (safetyData.acceleration > 15 || safetyData.acceleration < -15) {
+    // Check for sudden acceleration/deceleration (more sensitive threshold)
+    if (safetyData.acceleration > 8 || safetyData.acceleration < -8) {
       console.log('🎤 Enabling voice recognition due to sudden acceleration/deceleration');
       safetyMonitor.enableManualKeywordListening();
       return;
     }
     
-    // Check for high speed (potential accident)
-    if (safetyData.currentSpeed > 20) { // 20 m/s = 72 km/h
+    // Check for high speed (potential accident) - lower threshold for better detection
+    if (safetyData.currentSpeed > 15) { // 15 m/s = 54 km/h
       console.log('🎤 Enabling voice recognition due to high speed');
       safetyMonitor.enableManualKeywordListening();
       return;
     }
     
-    // Check for sudden location jumps (GPS anomaly)
-    if (safetyData.lastLocation) {
-      // This would need to be implemented with previous location tracking
-      // For now, we'll rely on the stationary user detection callback
+    // Check for high voice level (potential distress)
+    if (safetyData.voiceLevel && safetyData.voiceLevel > 80) { // 80 dB threshold
+      console.log('🎤 Enabling voice recognition due to high voice level');
+      safetyMonitor.enableManualKeywordListening();
+      return;
     }
+    
+    // Check for keyword detection (already detected, but ensure voice is enabled)
+    if (safetyData.keywordDetected) {
+      console.log('🎤 Voice recognition already enabled due to keyword detection');
+      safetyMonitor.enableManualKeywordListening();
+      return;
+    }
+    
+    // Check for sudden location jumps (GPS anomaly) - would need previous location tracking
+    // For now, we'll rely on the stationary user detection callback
   };
 
   const stopSafetyMonitoring = () => {
