@@ -244,13 +244,10 @@ class SafetyMonitor {
           const permission = await (DeviceMotionEvent as any).requestPermission();
           if (permission !== 'granted') {
             console.warn('Motion sensor permission denied');
-            if (this.onPermissionRequest) {
-              this.onPermissionRequest('motion', false);
-            }
+            // Don't trigger popups - just log the status
           } else {
-            if (this.onPermissionRequest) {
-              this.onPermissionRequest('motion', true);
-            }
+            console.log('Motion sensor permission granted');
+            // Don't trigger popups - just log the status
           }
         }
       } catch (error) {
@@ -689,9 +686,7 @@ class SafetyMonitor {
             }
           } else if (error.code === 1) { // PERMISSION_DENIED
             console.error('📍 Geolocation permission denied - please enable location access');
-            if (this.onPermissionRequest) {
-              this.onPermissionRequest('microphone', false); // Reuse permission callback
-            }
+            // Don't trigger popups - just log the error
           } else if (error.code === 2) { // POSITION_UNAVAILABLE
             console.warn('📍 Geolocation position unavailable - GPS might be weak or indoors');
             if (consecutiveErrors > 3) {
@@ -951,9 +946,7 @@ class SafetyMonitor {
         const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
         if (permission.state === 'denied') {
           console.warn('❌ Microphone permission denied');
-          if (this.onPermissionRequest) {
-            this.onPermissionRequest('microphone', false);
-          }
+          // Don't trigger popups - just log the status
           return;
         }
       }
@@ -980,10 +973,8 @@ class SafetyMonitor {
         
         this.mediaStream = stream;
         
-        // Notify that permission was granted
-        if (this.onPermissionRequest) {
-          this.onPermissionRequest('microphone', true);
-        }
+        // Just log permission granted, don't trigger popups
+        console.log('🎤 Microphone permission granted successfully');
         
         // Check if AudioContext is supported
         if (!window.AudioContext && !(window as any).webkitAudioContext) {
@@ -1087,9 +1078,8 @@ class SafetyMonitor {
           console.error('❌ Microphone constraints not satisfied');
         }
         
-        if (this.onPermissionRequest) {
-          this.onPermissionRequest('microphone', false);
-        }
+        // Don't trigger popups - just log the error
+        console.log('🎤 Microphone access failed');
       });
   }
 
