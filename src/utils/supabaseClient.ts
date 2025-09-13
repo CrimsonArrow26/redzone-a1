@@ -7,7 +7,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // Handle refresh token errors gracefully
+    flowType: 'pkce'
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'redzone-app'
+    }
   }
 });
 

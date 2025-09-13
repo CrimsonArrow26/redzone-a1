@@ -19,24 +19,30 @@ const PermissionInitializer: React.FC = () => {
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
 
   useEffect(() => {
+    // Add a timeout to prevent hanging indefinitely
+    const timeoutId = setTimeout(() => {
+      if (isInitializing) {
+        console.warn('Permission initialization timed out, continuing anyway');
+        setIsInitializing(false);
+      }
+    }, 10000); // 10 second timeout
+
     initializePermissions();
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const initializePermissions = async () => {
     console.log('🔐 Initializing permissions...');
     
     try {
-      // Check and request microphone permission
-      await checkMicrophonePermission();
-      
-      // Check and request location permission
-      await checkLocationPermission();
-      
-      // Check and request notification permission
-      await checkNotificationPermission();
-      
-      // Check motion sensor permission (iOS specific)
-      await checkMotionPermission();
+      // Check permissions in parallel, but don't fail if any individual check fails
+      await Promise.allSettled([
+        checkMicrophonePermission(),
+        checkLocationPermission(),
+        checkNotificationPermission(),
+        checkMotionPermission()
+      ]);
       
       setIsInitializing(false);
       
@@ -50,7 +56,8 @@ const PermissionInitializer: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('Error initializing permissions:', error);
+      console.warn('Error initializing permissions (non-blocking):', error);
+      // Don't block the app if permission initialization fails
       setIsInitializing(false);
     }
   };

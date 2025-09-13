@@ -16,7 +16,21 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  // Add timeout for loading state to prevent infinite loading
+  const [loadingTimeout, setLoadingTimeout] = React.useState(false);
+  
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('Auth loading timed out, continuing anyway');
+        setLoadingTimeout(true);
+      }
+    }, 15000); // 15 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
+
+  if (loading && !loadingTimeout) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4">
         <div className="text-center">

@@ -33,11 +33,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('Session error (non-blocking):', error.message);
+          // Don't block the app if there's a session error
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
       } catch (error) {
-        console.error('Error getting initial session:', error);
+        console.warn('Error getting initial session (non-blocking):', error);
+        // Don't block the app if there's an error
+        setSession(null);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -49,8 +59,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
-        setSession(session);
-        setUser(session?.user ?? null);
+        
+        // Handle refresh token errors gracefully
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.warn('Token refresh failed, clearing auth state');
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
         setLoading(false);
       }
     );

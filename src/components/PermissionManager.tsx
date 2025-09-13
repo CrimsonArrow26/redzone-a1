@@ -380,4 +380,4 @@ export const PermissionBanner: React.FC = () => {
   );
 };
 
-export default PermissionManager;
+export default PermissionProvider;
