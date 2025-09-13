@@ -34,116 +34,151 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <NotificationProvider>
-          <ZoneProvider>
-            <Router>
-              <div className="App">
-                <Routes>
-                  {/* Public Auth Routes */}
-                  <Route path="/login" element={
-                    <AuthGuard requireAuth={false}>
-                      <AuthPage />
-                    </AuthGuard>
-                  } />
-                  <Route path="/register" element={
-                    <AuthGuard requireAuth={false}>
-                      <AuthPage />
-                    </AuthGuard>
-                  } />
-                  <Route path="/auth/callback" element={<AuthCallback />} />
-                  
-                  {/* Protected App Routes */}
-                  <Route path="/" element={
-                    <AuthGuard>
+          <Router>
+            <div className="App">
+              <Routes>
+                {/* Public Auth Routes */}
+                <Route path="/login" element={
+                  <AuthGuard requireAuth={false}>
+                    <AuthPage />
+                  </AuthGuard>
+                } />
+                <Route path="/register" element={
+                  <AuthGuard requireAuth={false}>
+                    <AuthPage />
+                  </AuthGuard>
+                } />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                
+                {/* Protected App Routes - Only these need ZoneProvider */}
+                <Route path="/" element={
+                  <AuthGuard>
+                    <ZoneProvider>
                       <Home />
-                    </AuthGuard>
-                  } />
+                    </ZoneProvider>
+                  </AuthGuard>
+                } />
                   <Route path="/home" element={
                     <AuthGuard>
-                      <Home />
+                      <ZoneProvider>
+                        <Home />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/news" element={
                     <AuthGuard>
-                      <News />
+                      <ZoneProvider>
+                        <News />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/events" element={
                     <AuthGuard>
-                      <Events />
+                      <ZoneProvider>
+                        <Events />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/alerts" element={
                     <AuthGuard>
-                      <Alerts />
+                      <ZoneProvider>
+                        <Alerts />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/community" element={
                     <AuthGuard>
-                      <Community />
+                      <ZoneProvider>
+                        <Community />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/redzones" element={
                     <AuthGuard>
-                      <RedZones />
+                      <ZoneProvider>
+                        <RedZones />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/admin" element={
                     <AuthGuard>
-                      <AdminRouteGuard>
-                        <AdminDashboard />
-                      </AdminRouteGuard>
+                      <ZoneProvider>
+                        <AdminRouteGuard>
+                          <AdminDashboard />
+                        </AdminRouteGuard>
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/route-analyzer" element={
                     <AuthGuard>
-                      <RouteAnalyzer />
+                      <ZoneProvider>
+                        <RouteAnalyzer />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/emergency" element={
                     <AuthGuard>
-                      <Emergency />
+                      <ZoneProvider>
+                        <Emergency />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/sos" element={
                     <AuthGuard>
-                      <SOS />
+                      <ZoneProvider>
+                        <SOS />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/profile" element={
                     <AuthGuard>
-                      <UserProfile />
+                      <ZoneProvider>
+                        <UserProfile />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/reports" element={
                     <AuthGuard>
-                      <Reports />
+                      <ZoneProvider>
+                        <Reports />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/report" element={
                     <AuthGuard>
-                      <ReportIncident />
+                      <ZoneProvider>
+                        <ReportIncident />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/notification" element={
                     <AuthGuard>
-                      <Notification />
+                      <ZoneProvider>
+                        <Notification />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/debug" element={
                     <AuthGuard>
-                      <DebugPanel />
+                      <ZoneProvider>
+                        <DebugPanel />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   
                   {/* Test Routes */}
                   <Route path="/auth-test" element={
                     <AuthGuard>
-                      <AuthTest />
+                      <ZoneProvider>
+                        <AuthTest />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                   <Route path="/geocoding-test" element={
                     <AuthGuard>
-                      <GeocodingTest />
+                      <ZoneProvider>
+                        <GeocodingTest />
+                      </ZoneProvider>
                     </AuthGuard>
                   } />
                 </Routes>
@@ -151,7 +186,6 @@ function App() {
                 <BottomNavigation />
               </div>
             </Router>
-          </ZoneProvider>
         </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>

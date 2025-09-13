@@ -15,20 +15,49 @@ const PermissionStatus: React.FC<PermissionStatusProps> = ({
   useEffect(() => {
     const checkPermission = async () => {
       try {
+        // First try the permissions API
         if ('permissions' in navigator) {
-          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          setMicPermission(permission.state as any);
-          
-          // Listen for permission changes
-          permission.onchange = () => {
+          try {
+            const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
             setMicPermission(permission.state as any);
-          };
+            
+            // Listen for permission changes
+            permission.onchange = () => {
+              setMicPermission(permission.state as any);
+            };
+          } catch (permError) {
+            console.warn('Permissions API not supported or failed:', permError);
+            // Fallback to direct microphone test
+            await testMicrophoneAccess();
+          }
         } else {
-          setMicPermission('unknown');
+          console.log('Permissions API not supported, testing microphone access directly');
+          // Fallback to direct microphone test
+          await testMicrophoneAccess();
         }
       } catch (error) {
         console.warn('Could not check microphone permission:', error);
         setMicPermission('unknown');
+      }
+    };
+
+    const testMicrophoneAccess = async () => {
+      try {
+        // Test if we can access microphone
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('✅ Microphone access test successful');
+        setMicPermission('granted');
+        // Stop the test stream immediately
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error: any) {
+        console.log('❌ Microphone access test failed:', error);
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          setMicPermission('denied');
+        } else if (error.name === 'NotFoundError') {
+          setMicPermission('denied');
+        } else {
+          setMicPermission('prompt');
+        }
       }
     };
 

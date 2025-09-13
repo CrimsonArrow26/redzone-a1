@@ -210,24 +210,32 @@ class SafetyMonitor {
     }
   }
 
+  private async testMicrophoneAccess(): Promise<boolean> {
+    try {
+      console.log('🎤 Testing microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone access test successful');
+      // Stop the test stream immediately
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error: any) {
+      console.log('❌ Microphone access test failed:', error);
+      return false;
+    }
+  }
+
   private async requestPermissions() {
-    // Only check permission status, don't request automatically
+    // Test microphone access directly for more accurate detection
+    const micAccessible = await this.testMicrophoneAccess();
+    console.log('🎤 Microphone accessible:', micAccessible);
+    
+    // Also check via permissions API if available
     if ('permissions' in navigator) {
       try {
         const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        console.log('🎤 Current microphone permission status:', permission.state);
-        
-        if (permission.state === 'granted') {
-          console.log('✅ Microphone permission already granted');
-          if (this.onPermissionRequest) {
-            this.onPermissionRequest('microphone', true);
-          }
-        } else {
-          console.log('⏳ Microphone permission not granted - will request when needed');
-          // Don't trigger permission popup here - only when user actually needs it
-        }
+        console.log('🎤 Permissions API status:', permission.state);
       } catch (error) {
-        console.warn('Could not check microphone permission:', error);
+        console.warn('Could not check microphone permission via API:', error);
       }
     }
 
