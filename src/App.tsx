@@ -23,9 +23,12 @@ import Notification from './pages/Notification';
 import AuthTest from './pages/AuthTest';
 import DebugPanel from './pages/DebugPanel';
 import GeocodingTest from './pages/GeocodingTest';
+import PermissionTest from './pages/PermissionTest';
 import BottomNavigation from './components/BottomNavigation';
 import FloatingActionButton from './components/FloatingActionButton';
 import ErrorBoundary from './components/ErrorBoundary';
+import PermissionInitializer from './components/PermissionInitializer';
+import { PermissionProvider } from './components/PermissionManager';
 import { AuthPage } from '../sign/components/AuthPage';
 import './App.css';
 
@@ -33,10 +36,12 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <NotificationProvider>
-          <Router>
-            <div className="App">
-              <Routes>
+        <PermissionProvider>
+          <NotificationProvider>
+            <PermissionInitializer />
+            <Router>
+              <div className="App">
+                <Routes>
                 {/* Public Auth Routes */}
                 <Route path="/login" element={
                   <AuthGuard requireAuth={false}>
@@ -181,12 +186,20 @@ function App() {
                       </ZoneProvider>
                     </AuthGuard>
                   } />
+                  <Route path="/permission-test" element={
+                    <AuthGuard>
+                      <ZoneProvider>
+                        <PermissionTest />
+                      </ZoneProvider>
+                    </AuthGuard>
+                  } />
                 </Routes>
                 <FloatingActionButton />
                 <BottomNavigation />
               </div>
             </Router>
-        </NotificationProvider>
+          </NotificationProvider>
+        </PermissionProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

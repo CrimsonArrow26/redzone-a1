@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SOSService from '../utils/sosService';
+import { usePermissions, PermissionStatus } from '../components/PermissionManager';
 
 type PermissionStateType = 'granted' | 'denied' | 'prompt' | 'unknown';
 
 const DebugPanel: React.FC = () => {
+  const { permissions, requestPermission } = usePermissions();
   const [sosAuth, setSosAuth] = useState<any>(null);
   const [recentAlerts, setRecentAlerts] = useState<number | null>(null);
   const [micPermission, setMicPermission] = useState<PermissionStateType>('unknown');
@@ -251,6 +253,17 @@ const DebugPanel: React.FC = () => {
           <li>Audio baseline: <strong>{audioBaseline == null ? 'n/a' : audioBaseline.toFixed(1)}</strong></li>
           <li>Noise anomaly: <strong>{String(noiseAnomaly)}</strong></li>
         </ul>
+        
+        {/* New Permission Status Components */}
+        <div style={{ marginTop: 16, padding: 12, background: '#f8f9fa', borderRadius: 8 }}>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: 14 }}>Permission Status</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <PermissionStatus type="microphone" showLabel={true} />
+            <PermissionStatus type="location" showLabel={true} />
+            <PermissionStatus type="notifications" showLabel={true} />
+            <PermissionStatus type="motion" showLabel={true} />
+          </div>
+        </div>
         {transcript && (
           <div style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12, background: '#f7f7f9', padding: 8, borderRadius: 8 }}>
             <strong>Transcript:</strong>
@@ -308,6 +321,7 @@ const DebugPanel: React.FC = () => {
         <ul style={{ lineHeight: 1.6 }}>
           <li>This panel is temporary and for internal testing only.</li>
           <li>Many sensors need a real device and user gestures/permissions.</li>
+          <li><a href="/permission-test" style={{ color: '#0066cc' }}>Go to Permission Test Page</a></li>
         </ul>
       </section>
     </div>

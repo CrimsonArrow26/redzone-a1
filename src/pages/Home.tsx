@@ -3,6 +3,7 @@ import { MapPin, Phone, FileText, Shield, Bell, User } from 'lucide-react';
 import FeatureCard from '../components/FeatureCard';
 import { useZone } from '../context/ZoneContext';
 import SafetyConfirmationPopup from '../components/SafetyConfirmationPopup';
+import { PermissionBanner } from '../components/PermissionManager';
 import './Home.css';
 
 const Home: React.FC = () => {
@@ -18,6 +19,9 @@ const Home: React.FC = () => {
 
   return (
     <div className="homepage">
+      {/* Permission Banner */}
+      <PermissionBanner />
+      
       {/* Home Title and Subtitle */}
       <header className="home-header">
         <div className="header-container">
