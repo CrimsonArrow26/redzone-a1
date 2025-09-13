@@ -46,17 +46,10 @@ export const ZoneProvider = ({ children }: { children: ReactNode }) => {
 
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [safetyMonitor] = useState(() => new SafetyMonitor(
-    // Permission request callback
+    // Permission request callback - just log status, don't show popups
     (type: 'microphone' | 'motion', granted: boolean) => {
-      if (!granted) {
-        showSafetyAlert({
-          type: 'permission_required',
-          message: `${type === 'microphone' ? 'Microphone' : 'Motion sensor'} access is required for safety monitoring.`,
-          severity: 'info',
-          autoClose: true,
-          autoCloseDelay: 8000
-        });
-      }
+      console.log(`🔐 ${type} permission status:`, granted ? 'granted' : 'not granted');
+      // Don't show popups automatically - let the UI components handle this
     },
 
   ));

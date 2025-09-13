@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import PermissionStatus from './PermissionStatus';
 import './Header.css';
 
 interface HeaderProps {
@@ -26,6 +27,7 @@ const Header: React.FC<HeaderProps> = ({ title = '', showBack = false, onHamburg
         <h1 className="header-title">{title}</h1>
 
         <div className="header-side right">
+          <PermissionStatus className="mr-2" />
           <button
             className="header-icon-btn header-hamburger"
             onClick={() => {

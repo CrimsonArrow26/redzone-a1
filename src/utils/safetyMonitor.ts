@@ -56,6 +56,7 @@ class SafetyMonitor {
   private isMobileDevice = false;
   private isIOS = false;
   private isAndroid = false;
+  private isAppEnvironment = false;
   
   // Transcript functionality
   private transcript = '';
@@ -130,11 +131,63 @@ class SafetyMonitor {
     this.isIOS = /iphone|ipad|ipod/i.test(userAgent);
     this.isAndroid = /android/i.test(userAgent);
     
+    // Detect app environments (Electron, Tauri, PWA, etc.)
+    this.isAppEnvironment = this.detectAppEnvironment();
+    
     console.log('📱 Device Detection:');
     console.log('  - Mobile Device:', this.isMobileDevice);
     console.log('  - iOS:', this.isIOS);
     console.log('  - Android:', this.isAndroid);
+    console.log('  - App Environment:', this.isAppEnvironment);
     console.log('  - User Agent:', userAgent);
+  }
+
+  private detectAppEnvironment(): boolean {
+    const userAgent = navigator.userAgent.toLowerCase();
+    
+    // Check for Electron
+    if (userAgent.includes('electron')) {
+      console.log('🔍 Detected Electron app');
+      return true;
+    }
+    
+    // Check for Tauri
+    if (userAgent.includes('tauri')) {
+      console.log('🔍 Detected Tauri app');
+      return true;
+    }
+    
+    // Check for Cordova/PhoneGap
+    if (userAgent.includes('cordova') || userAgent.includes('phonegap')) {
+      console.log('🔍 Detected Cordova/PhoneGap app');
+      return true;
+    }
+    
+    // Check for Capacitor
+    if (userAgent.includes('capacitor')) {
+      console.log('🔍 Detected Capacitor app');
+      return true;
+    }
+    
+    // Check for PWA (Progressive Web App)
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('🔍 Detected PWA (standalone mode)');
+      return true;
+    }
+    
+    // Check for Windows app (Windows Runtime)
+    if (userAgent.includes('windows') && (userAgent.includes('app') || userAgent.includes('runtime'))) {
+      console.log('🔍 Detected Windows app');
+      return true;
+    }
+    
+    // Check for custom app indicators
+    if (window.navigator && (window.navigator as any).standalone) {
+      console.log('🔍 Detected standalone app');
+      return true;
+    }
+    
+    return false;
   }
 
   private adjustSettingsForMobile() {
@@ -158,19 +211,20 @@ class SafetyMonitor {
   }
 
   private async requestPermissions() {
-    // Request microphone permission
+    // Only check permission status, don't request automatically
     if ('permissions' in navigator) {
       try {
         const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        if (permission.state === 'denied') {
-          console.warn('Microphone permission denied');
-          if (this.onPermissionRequest) {
-            this.onPermissionRequest('microphone', false);
-          }
-        } else if (permission.state === 'granted') {
+        console.log('🎤 Current microphone permission status:', permission.state);
+        
+        if (permission.state === 'granted') {
+          console.log('✅ Microphone permission already granted');
           if (this.onPermissionRequest) {
             this.onPermissionRequest('microphone', true);
           }
+        } else {
+          console.log('⏳ Microphone permission not granted - will request when needed');
+          // Don't trigger permission popup here - only when user actually needs it
         }
       } catch (error) {
         console.warn('Could not check microphone permission:', error);
@@ -880,7 +934,7 @@ class SafetyMonitor {
     this.startKeywordListening();
   }
 
-  private startVoiceLevelMonitoring() {
+  private async startVoiceLevelMonitoring() {
     console.log('🎤 Starting voice level monitoring...');
     console.log('🎤 Navigator mediaDevices available:', !!navigator.mediaDevices);
     console.log('🎤 getUserMedia available:', !!('getUserMedia' in navigator.mediaDevices));
@@ -889,6 +943,22 @@ class SafetyMonitor {
     if (!('getUserMedia' in navigator.mediaDevices)) {
       console.warn('❌ Microphone access not supported');
       return;
+    }
+
+    // Check if permission is already granted before requesting
+    try {
+      if ('permissions' in navigator) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (permission.state === 'denied') {
+          console.warn('❌ Microphone permission denied');
+          if (this.onPermissionRequest) {
+            this.onPermissionRequest('microphone', false);
+          }
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('Could not check microphone permission:', error);
     }
 
     // Mobile-optimized audio constraints
@@ -909,6 +979,11 @@ class SafetyMonitor {
         console.log('🎤 Stream active:', stream.active);
         
         this.mediaStream = stream;
+        
+        // Notify that permission was granted
+        if (this.onPermissionRequest) {
+          this.onPermissionRequest('microphone', true);
+        }
         
         // Check if AudioContext is supported
         if (!window.AudioContext && !(window as any).webkitAudioContext) {

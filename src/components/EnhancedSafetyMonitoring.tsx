@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Volume2, AlertTriangle, MapPin, Gauge, Activity, Bell, X } from 'lucide-react';
 import SOSService from '../utils/sosService';
 import { useZone } from '../context/ZoneContext';
+import PermissionStatus from './PermissionStatus';
 import './EnhancedSafetyMonitoring.css';
 
 interface EnhancedSafetyMonitoringProps {
@@ -561,6 +562,7 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
         <div className="safety-status">
           {isInRedZone && <span className="redzone-indicator">🚨 IN RED ZONE</span>}
           {isBeeping && <span className="beeping-status">🔊 ALERTING</span>}
+          <PermissionStatus className="ml-2" />
         </div>
       </div>
 
@@ -569,6 +571,7 @@ const EnhancedSafetyMonitoring: React.FC<EnhancedSafetyMonitoringProps> = ({
         <div className="section-header">
           <Mic size={20} />
           <span>Voice Recognition</span>
+          <PermissionStatus className="ml-auto" />
         </div>
         <div className="controls">
           <button

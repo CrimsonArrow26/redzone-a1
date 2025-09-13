@@ -43,6 +43,24 @@ const SafetyAlertPopup: React.FC<SafetyAlertPopupProps> = ({
     }, 300);
   };
 
+  const handlePermissionRequest = async () => {
+    try {
+      // Request microphone permission with user gesture
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone permission granted!');
+      
+      // Stop the stream immediately as we only needed permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Close the popup after successful permission
+      handleClose();
+    } catch (error) {
+      console.error('❌ Microphone permission denied:', error);
+      // Still close the popup to prevent infinite loops
+      handleClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   const getIcon = () => {
@@ -123,7 +141,7 @@ const SafetyAlertPopup: React.FC<SafetyAlertPopupProps> = ({
         <div className="safety-alert-actions">
           <button 
             className={`safety-alert-button safety-alert-${severity}`}
-            onClick={handleClose}
+            onClick={alertType === 'permission_required' ? handlePermissionRequest : handleClose}
           >
             {alertType === 'permission_required' ? 'Request Permission' : 'I Understand'}
           </button>
